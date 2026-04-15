@@ -69,7 +69,8 @@ pub fn is_git_repo(working_dir: &str) -> bool {
 pub fn get_diff(working_dir: &str) -> Option<String> {
     let path = Path::new(working_dir);
     
-    if !path.join(".git").exists() {
+    let git_path = path.join(".git");
+    if !git_path.exists() {
         return None;
     }
 
