@@ -154,10 +154,10 @@ fn handle_config_command(command: ConfigCommands) -> Result<()> {
 }
 
 fn get_sidebar_state_path() -> PathBuf {
-    let mut path = dirs::config_dir().unwrap_or_else(|| PathBuf::from("."));
-    path.push("agent-sidebar");
-    path.push(SIDEBAR_STATE_FILE);
-    path
+    dirs::home_dir()
+        .unwrap_or_else(|| PathBuf::from("~"))
+        .join(".agent-sidebar")
+        .join(SIDEBAR_STATE_FILE)
 }
 
 fn write_sidebar_state(pane_id: &str) -> Result<()> {
