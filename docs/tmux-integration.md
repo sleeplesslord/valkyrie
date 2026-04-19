@@ -129,7 +129,7 @@ State is tracked in `~/.agent-sidebar/sidebar-pane`.
 
 ### Window Switch Hook
 
-The `move-sidebar-to-current.sh` script is triggered on `window-switched` hook to move the sidebar to the current window automatically.
+The `move-sidebar-to-current.sh` script is triggered on `session-window-changed` hook to move the sidebar to the current window automatically.
 
 ### Manual Config
 
@@ -140,7 +140,7 @@ Users can add to `~/.tmux.conf`:
 bind s run-shell "/path/to/toggle-sidebar.sh"
 
 # Move sidebar when switching windows
-set-hook -g window-switched 'run-shell "/path/to/move-sidebar-to-current.sh"'
+set-hook -g session-window-changed 'run-shell "/path/to/move-sidebar-to-current.sh"'
 ```
 
 ### Auto-start

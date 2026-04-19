@@ -217,7 +217,7 @@ fn print_tmux_config() {
             println!("bind s run-shell \"{}\"", toggle_script.display());
             println!();
             println!("# Move sidebar to current window when switching windows");
-            println!("set-hook -g window-switched 'run-shell \"{}\"'", move_script.display());
+            println!("set-hook -g session-window-changed 'run-shell \"{}\"'", move_script.display());
             println!();
             println!("# After adding, reload tmux config with:");
             println!("tmux source ~/.tmux.conf");
