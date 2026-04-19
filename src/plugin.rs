@@ -27,6 +27,8 @@ fn plugin_install_dir() -> PathBuf {
 struct OpenCodeConfig {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     plugin: Vec<serde_json::Value>,
+    #[serde(flatten)]
+    other: serde_json::Map<String, serde_json::Value>,
 }
 
 pub fn install(force: bool) -> Result<()> {

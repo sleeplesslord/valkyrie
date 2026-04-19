@@ -127,6 +127,105 @@ impl Tmux {
 
         Ok(String::from_utf8_lossy(&output.stdout).to_string())
     }
+
+    pub fn get_current_window(&self) -> Result<String> {
+        let output = Command::new("tmux")
+            .args(["display-message", "-p", "#{window_id}"])
+            .output()?;
+
+        if !output.status.success() {
+            anyhow::bail!("Failed to get current window");
+        }
+
+        Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+    }
+
+    pub fn get_current_session(&self) -> Result<String> {
+        let output = Command::new("tmux")
+            .args(["display-message", "-p", "#{session_name}"])
+            .output()?;
+
+        if !output.status.success() {
+            anyhow::bail!("Failed to get current session");
+        }
+
+        Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+    }
+
+    pub fn pane_exists(&self, pane_id: &str) -> bool {
+        Command::new("tmux")
+            .args(["list-panes", "-a", "-F", "#{pane_id}"])
+            .output()
+            .map(|o| String::from_utf8_lossy(&o.stdout).lines().any(|l| l == pane_id))
+            .unwrap_or(false)
+    }
+
+    pub fn get_pane_window(&self, pane_id: &str) -> Option<String> {
+        let output = Command::new("tmux")
+            .args(["list-panes", "-a", "-F", "#{pane_id}:#{window_id}"])
+            .output()
+            .ok()?;
+
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        for line in stdout.lines() {
+            let parts: Vec<&str> = line.splitn(2, ':').collect();
+            if parts.len() == 2 && parts[0] == pane_id {
+                return Some(parts[1].to_string());
+            }
+        }
+        None
+    }
+
+    pub fn break_pane(&self, pane_id: &str, target_window: &str) -> Result<()> {
+        let status = Command::new("tmux")
+            .args(["break-pane", "-s", pane_id, "-t", target_window])
+            .status()?;
+
+        if !status.success() {
+            anyhow::bail!("Failed to break pane {} to window {}", pane_id, target_window);
+        }
+        Ok(())
+    }
+
+    pub fn join_pane(&self, pane_id: &str, target_window: &str, width: u16) -> Result<()> {
+        let status = Command::new("tmux")
+            .args([
+                "join-pane",
+                "-hb",
+                "-l", &width.to_string(),
+                "-s", pane_id,
+                "-t", target_window,
+            ])
+            .status()?;
+
+        if !status.success() {
+            anyhow::bail!("Failed to join pane {} to window {}", pane_id, target_window);
+        }
+        Ok(())
+    }
+
+    pub fn new_window(&self, name: &str) -> Result<String> {
+        let output = Command::new("tmux")
+            .args(["new-window", "-P", "-F", "#{window_id}", "-n", name])
+            .output()?;
+
+        if !output.status.success() {
+            anyhow::bail!("Failed to create new window");
+        }
+
+        Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+    }
+
+    pub fn select_window(&self, window_id: &str) -> Result<()> {
+        let status = Command::new("tmux")
+            .args(["select-window", "-t", window_id])
+            .status()?;
+
+        if !status.success() {
+            anyhow::bail!("Failed to select window {}", window_id);
+        }
+        Ok(())
+    }
 }
 
 impl Default for Tmux {

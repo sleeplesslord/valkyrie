@@ -113,16 +113,34 @@ TMUX=/tmp/tmux-1000/default,1234,0
 
 ## Integration Hooks
 
-### User Config
+### Quick Setup
+
+Run `agent-sidebar setup-tmux` to print the recommended configuration. Add the output to `~/.tmux.conf` and reload with `tmux source ~/.tmux.conf`.
+
+### Toggle Sidebar
+
+The `toggle-sidebar.sh` script provides toggle functionality:
+
+- If no sidebar exists: spawns new sidebar pane
+- If sidebar exists in current window: hides it (moves to hidden window)
+- If sidebar exists in different window: moves it to current window
+
+State is tracked in `~/.agent-sidebar/sidebar-pane`.
+
+### Window Switch Hook
+
+The `move-sidebar-to-current.sh` script is triggered on `window-switched` hook to move the sidebar to the current window automatically.
+
+### Manual Config
 
 Users can add to `~/.tmux.conf`:
 
 ```bash
-# Bind prefix+s to spawn sidebar
-bind s split-window -hb -l 30 "agent-sidebar"
+# Toggle sidebar with prefix+s
+bind s run-shell "/path/to/toggle-sidebar.sh"
 
-# Bind prefix+S to toggle sidebar (requires script)
-bind S run-shell "~/.local/bin/toggle-sidebar.sh"
+# Move sidebar when switching windows
+set-hook -g window-switched 'run-shell "/path/to/move-sidebar-to-current.sh"'
 ```
 
 ### Auto-start

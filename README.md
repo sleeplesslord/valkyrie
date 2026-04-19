@@ -11,6 +11,7 @@ A tmux sidebar TUI for tracking coding agents in real-time.
 - **Git Diff Stats**: Shows +X/-Y diff statistics for each agent
 - **Jump to Pane**: Navigate directly to agent panes from sidebar
 - **Rename Agents**: Custom names persist across sessions
+- **tmux Integration**: Sidebar follows when switching windows, toggle visibility
 
 ## Installation
 
@@ -20,6 +21,24 @@ agent-sidebar install
 ```
 
 Restart opencode after installation.
+
+## tmux Integration
+
+To enable the sidebar to follow you when switching windows and toggle visibility:
+
+```bash
+# Install scripts and print tmux config
+agent-sidebar setup-tmux
+
+# Add the printed config to ~/.tmux.conf, then reload
+tmux source ~/.tmux.conf
+```
+
+This installs helper scripts to `~/.local/bin/` and prints the tmux configuration.
+
+After setup:
+- `prefix + s` toggles the sidebar (show/hide)
+- Sidebar automatically moves to the current window when switching
 
 ## Usage
 
