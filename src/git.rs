@@ -26,13 +26,22 @@ pub fn get_diff_stats(working_dir: &str) -> Option<DiffStats> {
     }
 
     let output = Command::new("git")
-        .args(["diff", "--shortstat"])
+        .args(["diff", "HEAD", "--shortstat"])
         .current_dir(path)
         .output()
         .ok()?;
 
     if !output.status.success() {
-        return None;
+        let fallback = Command::new("git")
+            .args(["diff", "--shortstat"])
+            .current_dir(path)
+            .output()
+            .ok()?;
+        if !fallback.status.success() {
+            return None;
+        }
+        let stdout = String::from_utf8_lossy(&fallback.stdout);
+        return parse_shortstat(&stdout);
     }
 
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -74,11 +83,46 @@ pub fn get_diff(working_dir: &str) -> Option<String> {
         return None;
     }
 
-    let output = Command::new("git")
-        .args(["diff", "--color=never"])
+    let has_head = Command::new("git")
+        .args(["rev-parse", "HEAD"])
         .current_dir(path)
         .output()
-        .ok()?;
+        .map(|o| o.status.success())
+        .unwrap_or(false);
+
+    let output = if has_head {
+        Command::new("git")
+            .args(["diff", "HEAD", "--color=never"])
+            .current_dir(path)
+            .output()
+            .ok()?
+    } else {
+        let unstaged = Command::new("git")
+            .args(["diff", "--color=never"])
+            .current_dir(path)
+            .output()
+            .ok()?;
+
+        let staged = Command::new("git")
+            .args(["diff", "--cached", "--color=never"])
+            .current_dir(path)
+            .output()
+            .ok()?;
+
+        let mut combined = String::from_utf8_lossy(&unstaged.stdout).to_string();
+        let staged_str = String::from_utf8_lossy(&staged.stdout);
+        if !staged_str.is_empty() {
+            if !combined.is_empty() {
+                combined.push('\n');
+            }
+            combined.push_str(&staged_str);
+        }
+
+        if combined.is_empty() {
+            return Some("No uncommitted changes".to_string());
+        }
+        return Some(combined);
+    };
 
     if !output.status.success() {
         return None;

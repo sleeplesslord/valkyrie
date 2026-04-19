@@ -25,6 +25,7 @@ pub struct App {
     pub input_buffer: String,
     pub last_refresh: DateTime<Utc>,
     pub tick_count: u64,
+    pub diff_scroll: usize,
     tmux: Tmux,
     sidebar_pane_id: Option<String>,
     signal_watcher: SignalWatcher,
@@ -61,6 +62,7 @@ impl App {
             input_buffer: String::new(),
             last_refresh: Utc::now(),
             tick_count: 0,
+            diff_scroll: 0,
             tmux,
             sidebar_pane_id,
             signal_watcher,
@@ -336,10 +338,20 @@ impl App {
     pub fn start_diff_view(&mut self) {
         if let Some(agent) = self.selected_agent() {
             let agent_id = agent.pane_id.clone();
-            let diff = git::get_diff(&agent.working_dir).unwrap_or_default();
+            let diff = git::get_diff(&agent.working_dir)
+                .unwrap_or_else(|| "Not a git repository".to_string());
             self.input_buffer = diff;
+            self.diff_scroll = 0;
             self.mode = Mode::DiffView { agent_id };
         }
+    }
+
+    pub fn diff_scroll_up(&mut self) {
+        self.diff_scroll = self.diff_scroll.saturating_sub(1);
+    }
+
+    pub fn diff_scroll_down(&mut self) {
+        self.diff_scroll += 1;
     }
 }
 

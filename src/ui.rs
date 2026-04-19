@@ -1,7 +1,7 @@
 use crate::app::{App, Mode};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
-    style::{Color, Style},
+    style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, List, ListItem, Paragraph},
     Frame,
@@ -196,17 +196,26 @@ fn render_rename_input(f: &mut Frame, app: &App) {
 fn render_diff_view(f: &mut Frame, app: &App) {
     let area = centered_rect(90, 80, f.area());
 
-    let diff_text: Vec<Line> = app
-        .input_buffer
-        .lines()
-        .take(area.height.saturating_sub(2) as usize)
+    let max_lines = area.height.saturating_sub(2) as usize;
+    let all_lines: Vec<&str> = app.input_buffer.lines().collect();
+    let total_lines = all_lines.len();
+    let scroll = app.diff_scroll.min(all_lines.len().saturating_sub(1));
+
+    let diff_text: Vec<Line> = all_lines
+        .into_iter()
+        .skip(scroll)
+        .take(max_lines)
         .map(|line| {
-            let style = if line.starts_with('+') {
+            let style = if line.starts_with("diff --git") {
+                Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+            } else if line.starts_with("---") || line.starts_with("+++") {
+                Style::default().fg(Color::Magenta)
+            } else if line.starts_with("@@") {
+                Style::default().fg(Color::Cyan)
+            } else if line.starts_with('+') {
                 Style::default().fg(Color::Green)
             } else if line.starts_with('-') {
                 Style::default().fg(Color::Red)
-            } else if line.starts_with("@@") {
-                Style::default().fg(Color::Cyan)
             } else {
                 Style::default().fg(Color::White)
             };
@@ -214,10 +223,11 @@ fn render_diff_view(f: &mut Frame, app: &App) {
         })
         .collect();
 
+    let title = format!(" Git Diff (Esc to close) {}/{} ", scroll + max_lines.min(total_lines - scroll), total_lines);
     let diff = Paragraph::new(diff_text)
         .block(
             Block::default()
-                .title(" Git Diff (Esc to close) ")
+                .title(title)
                 .borders(Borders::ALL)
                 .border_style(Style::default().fg(Color::Cyan)),
         );

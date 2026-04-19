@@ -21,6 +21,12 @@ use event::Event;
 use ratatui::{backend::CrosstermBackend, Terminal};
 use state::Config;
 use std::io;
+use std::path::PathBuf;
+
+const SIDEBAR_STATE_FILE: &str = "sidebar-pane";
+
+const TOGGLE_SCRIPT: &str = include_str!("../scripts/toggle-sidebar.sh");
+const MOVE_SCRIPT: &str = include_str!("../scripts/move-sidebar-to-current.sh");
 
 #[derive(Parser, Debug)]
 #[command(name = "agent-sidebar")]
@@ -50,6 +56,8 @@ enum Commands {
         #[command(subcommand)]
         command: ConfigCommands,
     },
+    #[command(about = "Print tmux configuration for sidebar integration")]
+    SetupTmux,
 }
 
 #[derive(Subcommand, Debug)]
@@ -91,6 +99,9 @@ async fn main() -> Result<()> {
         }
         Some(Commands::Config { command }) => {
             handle_config_command(command)?;
+        }
+        Some(Commands::SetupTmux) => {
+            print_tmux_config();
         }
         None => {
             run_tui(args.width).await?;
@@ -142,9 +153,89 @@ fn handle_config_command(command: ConfigCommands) -> Result<()> {
     Ok(())
 }
 
+fn get_sidebar_state_path() -> PathBuf {
+    let mut path = dirs::config_dir().unwrap_or_else(|| PathBuf::from("."));
+    path.push("agent-sidebar");
+    path.push(SIDEBAR_STATE_FILE);
+    path
+}
+
+fn write_sidebar_state(pane_id: &str) -> Result<()> {
+    let path = get_sidebar_state_path();
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    std::fs::write(&path, pane_id)?;
+    Ok(())
+}
+
+fn clear_sidebar_state() -> Result<()> {
+    let path = get_sidebar_state_path();
+    if path.exists() {
+        std::fs::remove_file(&path)?;
+    }
+    Ok(())
+}
+
+fn install_tmux_scripts() -> Result<PathBuf> {
+    let script_dir = dirs::home_dir()
+        .map(|h| h.join(".local").join("bin"))
+        .unwrap_or_else(|| PathBuf::from("/usr/local/bin"));
+    
+    std::fs::create_dir_all(&script_dir)?;
+    
+    let toggle_script = script_dir.join("toggle-sidebar.sh");
+    let move_script = script_dir.join("move-sidebar-to-current.sh");
+    
+    std::fs::write(&toggle_script, TOGGLE_SCRIPT)?;
+    std::fs::write(&move_script, MOVE_SCRIPT)?;
+    
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&toggle_script, std::fs::Permissions::from_mode(0o755))?;
+        std::fs::set_permissions(&move_script, std::fs::Permissions::from_mode(0o755))?;
+    }
+    
+    println!("Installed scripts to:");
+    println!("  {}", toggle_script.display());
+    println!("  {}", move_script.display());
+    println!();
+    
+    Ok(script_dir)
+}
+
+fn print_tmux_config() {
+    match install_tmux_scripts() {
+        Ok(script_dir) => {
+            let toggle_script = script_dir.join("toggle-sidebar.sh");
+            let move_script = script_dir.join("move-sidebar-to-current.sh");
+            
+            println!("# Add the following to your ~/.tmux.conf:");
+            println!();
+            println!("# Sidebar toggle keybinding");
+            println!("bind s run-shell \"{}\"", toggle_script.display());
+            println!();
+            println!("# Move sidebar to current window when switching windows");
+            println!("set-hook -g window-switched 'run-shell \"{}\"'", move_script.display());
+            println!();
+            println!("# After adding, reload tmux config with:");
+            println!("tmux source ~/.tmux.conf");
+        }
+        Err(e) => {
+            eprintln!("Failed to install scripts: {}", e);
+            std::process::exit(1);
+        }
+    }
+}
+
 async fn run_tui(width: u16) -> Result<()> {
     check_tmux()?;
     let _width = width;
+
+    if let Some(pane_id) = tmux::Tmux::current_pane_id() {
+        write_sidebar_state(&pane_id)?;
+    }
 
     enable_raw_mode()?;
     let mut stdout = io::stdout();
@@ -164,6 +255,8 @@ async fn run_tui(width: u16) -> Result<()> {
         DisableMouseCapture
     )?;
     terminal.show_cursor()?;
+
+    let _ = clear_sidebar_state();
 
     if let Err(err) = res {
         eprintln!("Error: {err:?}");
@@ -230,8 +323,17 @@ async fn run_app(
                     Mode::Help => {
                         app.mode = Mode::Normal;
                     }
-                    Mode::DiffView { .. } => {
-                        app.mode = Mode::Normal;
+                    Mode::DiffView { .. } => match key.code {
+                        crossterm::event::KeyCode::Esc => {
+                            app.mode = Mode::Normal;
+                        }
+                        crossterm::event::KeyCode::Char('j') | crossterm::event::KeyCode::Down => {
+                            app.diff_scroll_down();
+                        }
+                        crossterm::event::KeyCode::Char('k') | crossterm::event::KeyCode::Up => {
+                            app.diff_scroll_up();
+                        }
+                        _ => {}
                     }
                 }
             }
