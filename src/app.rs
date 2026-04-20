@@ -335,6 +335,24 @@ impl App {
         self.input_buffer.pop();
     }
 
+    pub fn open_diff_in_window(&self) {
+        if let Some(agent) = self.selected_agent() {
+            if !git::is_git_repo(&agent.working_dir) {
+                return;
+            }
+
+            let dir = &agent.working_dir;
+            let cmd = format!(
+                "LESS=RSX sh -c 'git -C \"{}\" diff HEAD 2>/dev/null || git -C \"{}\" diff'",
+                dir, dir
+            );
+
+            if let Err(e) = self.tmux.run_in_window("git-diff", &cmd) {
+                eprintln!("Failed to open diff window: {}", e);
+            }
+        }
+    }
+
     pub fn start_diff_view(&mut self) {
         if let Some(agent) = self.selected_agent() {
             let agent_id = agent.pane_id.clone();

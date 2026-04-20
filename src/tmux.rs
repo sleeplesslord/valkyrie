@@ -216,6 +216,18 @@ impl Tmux {
         Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
     }
 
+    pub fn run_in_window(&self, name: &str, command: &str) -> Result<String> {
+        let output = Command::new("tmux")
+            .args(["new-window", "-P", "-F", "#{window_id}", "-n", name, "--", command])
+            .output()?;
+
+        if !output.status.success() {
+            anyhow::bail!("Failed to create window for command: {}", command);
+        }
+
+        Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+    }
+
     pub fn select_window(&self, window_id: &str) -> Result<()> {
         let status = Command::new("tmux")
             .args(["select-window", "-t", window_id])
