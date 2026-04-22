@@ -32,15 +32,36 @@ pub enum AgentStatus {
 }
 
 impl AgentStatus {
-    pub fn indicator(&self) -> &'static str {
+    pub fn indicator(&self, activity: Option<&str>, tool: Option<&str>) -> String {
         match self {
-            AgentStatus::Running => "●",
-            AgentStatus::Idle => "○",
-            AgentStatus::WaitingInput => "◐",
-            AgentStatus::Error => "⚠",
-            AgentStatus::Offline => "✕",
-            AgentStatus::Unknown => "?",
+            AgentStatus::Running => {
+                match (activity, tool) {
+                    (Some("coding"), Some(t)) => format!("✎{}", truncate_tool(t)),
+                    (Some("exploring"), Some(t)) => format!("◉{}", truncate_tool(t)),
+                    (Some("running"), Some(t)) => format!("▶{}", truncate_tool(t)),
+                    (Some("researching"), Some(_)) => "◈web".to_string(),
+                    (_, Some(t)) => format!("◉{}", truncate_tool(t)),
+                    (Some("coding"), None) => "✎".to_string(),
+                    (Some("exploring"), None) => "◉".to_string(),
+                    (Some("running"), None) => "▶".to_string(),
+                    (Some("researching"), None) => "◈".to_string(),
+                    (Some("thinking"), None) => "◎".to_string(),
+                    _ => "●".to_string(),
+                }
+            }
+            AgentStatus::Idle => "○".to_string(),
+            AgentStatus::WaitingInput => "◐".to_string(),
+            AgentStatus::Error => "⚠".to_string(),
+            AgentStatus::Offline => "✕".to_string(),
+            AgentStatus::Unknown => "?".to_string(),
         }
+    }
+}
+
+fn truncate_tool(tool: &str) -> &str {
+    match tool.len() {
+        0..=6 => tool,
+        _ => &tool[..6],
     }
 }
 
@@ -67,6 +88,8 @@ pub struct Agent {
     pub agent_type: AgentType,
     pub status: AgentStatus,
     pub task_description: Option<String>,
+    pub activity: Option<String>,
+    pub tool_executing: Option<String>,
     pub working_dir: String,
     pub last_activity: DateTime<Utc>,
     pub diff_stats: Option<DiffStats>,
@@ -90,6 +113,8 @@ impl Agent {
             agent_type,
             status: AgentStatus::Unknown,
             task_description: None,
+            activity: None,
+            tool_executing: None,
             working_dir: pane.current_path.clone(),
             last_activity: Utc::now(),
             diff_stats: None,

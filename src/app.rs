@@ -208,6 +208,9 @@ impl App {
             if let Some(task) = self.signal_watcher.get_task(&agent.pane_id) {
                 agent.task_description = Some(task);
             }
+
+            agent.activity = self.signal_watcher.get_activity(&agent.pane_id);
+            agent.tool_executing = self.signal_watcher.get_tool_executing(&agent.pane_id);
             
             if let Some(worktree_path) = self.signal_watcher.get_worktree(&agent.pane_id) {
                 if let Some(root) = self.worktree_cache.root() {

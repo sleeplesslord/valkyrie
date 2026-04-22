@@ -17,6 +17,8 @@ pub struct SignalFile {
     pub agent_type: Option<String>,
     pub status: Option<String>,
     pub task: Option<String>,
+    pub activity: Option<String>,
+    pub tool_executing: Option<String>,
     pub working_dir: Option<String>,
     pub worktree: Option<String>,
     pub current_file: Option<String>,
@@ -173,6 +175,20 @@ impl SignalWatcher {
             .get(pane_id)
             .filter(|s| !s.is_stale())
             .and_then(|s| s.worktree.clone())
+    }
+
+    pub fn get_activity(&self, pane_id: &str) -> Option<String> {
+        self.signals
+            .get(pane_id)
+            .filter(|s| !s.is_stale())
+            .and_then(|s| s.activity.clone())
+    }
+
+    pub fn get_tool_executing(&self, pane_id: &str) -> Option<String> {
+        self.signals
+            .get(pane_id)
+            .filter(|s| !s.is_stale())
+            .and_then(|s| s.tool_executing.clone())
     }
 }
 

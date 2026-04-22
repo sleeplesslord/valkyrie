@@ -90,7 +90,10 @@ fn render_agent_list(f: &mut Frame, app: &App, area: Rect) {
                 base_style
             };
 
-            let status_indicator = agent.status.indicator();
+            let status_indicator = agent.status.indicator(
+                agent.activity.as_deref(),
+                agent.tool_executing.as_deref(),
+            );
             let type_indicator = match agent.agent_type {
                 crate::agent::AgentType::Opencode => "O",
                 crate::agent::AgentType::ClaudeCode => "C",
