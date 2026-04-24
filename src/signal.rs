@@ -12,6 +12,13 @@ const SIGNAL_DIR: &str = ".agent-sidebar/agents";
 const STALE_THRESHOLD_SECS: i64 = 60;
 
 #[derive(Debug, Clone, Deserialize)]
+pub struct SagaInfo {
+    pub id: String,
+    pub title: String,
+    pub status: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
 pub struct SignalFile {
     pub version: Option<i32>,
     pub agent_type: Option<String>,
@@ -23,6 +30,7 @@ pub struct SignalFile {
     pub worktree: Option<String>,
     pub current_file: Option<String>,
     pub last_update: Option<String>,
+    pub sagas: Option<Vec<SagaInfo>>,
     pub metadata: Option<serde_json::Value>,
 }
 
@@ -189,6 +197,14 @@ impl SignalWatcher {
             .get(pane_id)
             .filter(|s| !s.is_stale())
             .and_then(|s| s.tool_executing.clone())
+    }
+
+    pub fn get_sagas(&self, pane_id: &str) -> Vec<SagaInfo> {
+        self.signals
+            .get(pane_id)
+            .filter(|s| !s.is_stale())
+            .and_then(|s| s.sagas.clone())
+            .unwrap_or_default()
     }
 }
 

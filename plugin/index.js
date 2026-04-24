@@ -17,6 +17,10 @@ const TOOL_ACTIVITY = {
   webfetch: "researching",
 };
 
+const SAGA_ID_PATTERN = /\bsg\s+(?:claim|done|log|context|edit|label|priority|depend|relate|unclaim)\s+([\w.]+)/g;
+const SAGA_NEW_PATTERN = /\bsg\s+new\b/g;
+const SAGA_CLAIM_PATTERN = /\bsg\s+claim\s+([\w.]+)/g;
+
 async function findWorktree(filePath) {
   try {
     const dir = dirname(filePath);
@@ -27,6 +31,26 @@ async function findWorktree(filePath) {
   } catch {
     return null;
   }
+}
+
+async function fetchSagaInfo(sagaIds) {
+  const sagas = [];
+  for (const id of sagaIds) {
+    try {
+      const { stdout } = await execAsync(
+        `sg context ${id} --format json 2>/dev/null`
+      );
+      const data = JSON.parse(stdout);
+      if (data && data.saga) {
+        sagas.push({
+          id: data.saga.id,
+          title: data.saga.title || "",
+          status: data.saga.status || "unknown",
+        });
+      }
+    } catch {}
+  }
+  return sagas;
 }
 
 export default async function AgentSidebarPlugin(ctx) {
@@ -43,11 +67,63 @@ export default async function AgentSidebarPlugin(ctx) {
   let currentActivity = null;
   let currentTool = null;
   let currentTask = null;
+  const trackedSagas = new Map();
+  let sagaRefreshNeeded = false;
+  let lastSagaRefresh = 0;
+  const SAGA_REFRESH_INTERVAL = 10000;
+
+  async function refreshSagas() {
+    const now = Date.now();
+    if (!sagaRefreshNeeded && now - lastSagaRefresh < SAGA_REFRESH_INTERVAL) {
+      return;
+    }
+    sagaRefreshNeeded = false;
+    lastSagaRefresh = now;
+    const ids = [...trackedSagas.keys()];
+    if (ids.length === 0) return;
+    const sagas = await fetchSagaInfo(ids);
+    for (const s of sagas) {
+      trackedSagas.set(s.id, s);
+    }
+    for (const id of ids) {
+      if (!trackedSagas.has(id)) {
+        trackedSagas.delete(id);
+      }
+    }
+  }
+
+  function extractSagaIds(text) {
+    let found = false;
+    let m;
+    SAGA_ID_PATTERN.lastIndex = 0;
+    while ((m = SAGA_ID_PATTERN.exec(text)) !== null) {
+      trackedSagas.set(m[1], { id: m[1], title: "", status: "unknown" });
+      found = true;
+    }
+    SAGA_CLAIM_PATTERN.lastIndex = 0;
+    while ((m = SAGA_CLAIM_PATTERN.exec(text)) !== null) {
+      trackedSagas.set(m[1], { id: m[1], title: "", status: "unknown" });
+      found = true;
+    }
+    return found;
+  }
+
+  function extractSagaIdFromOutput(text) {
+    const idPattern = /(?:created|saga|Saga)\s+(?:saga\s+)?([a-z0-9]{5,}(?:\.\d+)?)/i;
+    const m = text.match(idPattern);
+    if (m) {
+      trackedSagas.set(m[1], { id: m[1], title: "", status: "unknown" });
+      return true;
+    }
+    return false;
+  }
 
   async function writeSignal(status) {
     lastStatus = status || lastStatus;
     try {
       await mkdir(SIGNAL_DIR, { recursive: true });
+      await refreshSagas();
+      const sagas = [...trackedSagas.values()].slice(0, 10);
       await writeFile(signalPath, JSON.stringify({
         version: 1,
         agent_type: "opencode",
@@ -59,6 +135,7 @@ export default async function AgentSidebarPlugin(ctx) {
         worktree: currentWorktree,
         current_file: currentFile,
         last_update: new Date().toISOString(),
+        sagas: sagas.length > 0 ? sagas : undefined,
       }, null, 2));
     } catch (err) {
       console.error("[agent-sidebar plugin] Failed to write signal:", err.message);
@@ -142,10 +219,23 @@ export default async function AgentSidebarPlugin(ctx) {
     "tool.execute.before": async (input, output) => {
       currentTool = input.tool;
       currentActivity = TOOL_ACTIVITY[input.tool] || "thinking";
+      if (input.tool === "bash" && input.command) {
+        const found = extractSagaIds(input.command);
+        if (found) sagaRefreshNeeded = true;
+      }
       await writeSignal();
     },
 
     "tool.execute.after": async (input) => {
+      if (input.tool === "bash" && input.command) {
+        SAGA_NEW_PATTERN.lastIndex = 0;
+        if (SAGA_NEW_PATTERN.test(input.command)) {
+          if (input.output) {
+            extractSagaIdFromOutput(input.output);
+          }
+          sagaRefreshNeeded = true;
+        }
+      }
       if (currentTool === input.tool) {
         currentTool = null;
       }

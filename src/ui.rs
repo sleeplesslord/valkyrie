@@ -120,6 +120,28 @@ fn render_agent_list(f: &mut Frame, app: &App, area: Rect) {
 
             items.push(ListItem::new(Line::from(Span::styled(content, style))));
             agent_index += 1;
+
+            for saga in agent.sagas.iter().take(3) {
+                let saga_status_str = match saga.status.as_str() {
+                    "active" => "[active]",
+                    "claimed" => "[claimed]",
+                    "done" => "[done]",
+                    _ => "[?]",
+                };
+                let saga_style = match saga.status.as_str() {
+                    "active" => Style::default().fg(Color::Green),
+                    "claimed" => Style::default().fg(Color::Yellow),
+                    "done" => Style::default().fg(Color::DarkGray),
+                    _ => Style::default().fg(Color::DarkGray),
+                };
+                let saga_title = truncate_str(&saga.title, 20);
+                let saga_line = if worktree.is_some() {
+                    format!("    {} {}", saga_status_str, saga_title)
+                } else {
+                    format!("  {} {}", saga_status_str, saga_title)
+                };
+                items.push(ListItem::new(Line::from(Span::styled(saga_line, saga_style))));
+            }
         }
 
         items.push(ListItem::new(Line::from("")));
