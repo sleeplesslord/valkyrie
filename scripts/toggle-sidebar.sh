@@ -86,10 +86,8 @@ spawn_sidebar() {
     local leftmost_pane
     leftmost_pane=$(tmux list-panes -F '#{pane_left} #{pane_id}' | sort -n | head -1 | awk '{print $2}')
 
-    tmux split-window -hb -l "$SIDEBAR_WIDTH" -c "$current_path" -t "$leftmost_pane" "agent-sidebar"
-
     local sidebar_pane
-    sidebar_pane=$(cat "$SIDEBAR_STATE" 2>/dev/null)
+    sidebar_pane=$(tmux split-window -hb -l "$SIDEBAR_WIDTH" -c "$current_path" -t "$leftmost_pane" -P -F '#{pane_id}' "agent-sidebar")
 
     local current_window
     current_window=$(get_current_window)

@@ -27,6 +27,7 @@ const SIDEBAR_STATE_FILE: &str = "sidebar-pane";
 
 const TOGGLE_SCRIPT: &str = include_str!("../scripts/toggle-sidebar.sh");
 const MOVE_SCRIPT: &str = include_str!("../scripts/move-sidebar-to-current.sh");
+const WINDOW_CLOSE_SCRIPT: &str = include_str!("../scripts/check-sidebar-window-close.sh");
 
 #[derive(Parser, Debug)]
 #[command(name = "agent-sidebar")]
@@ -186,20 +187,24 @@ fn install_tmux_scripts() -> Result<PathBuf> {
     
     let toggle_script = script_dir.join("toggle-sidebar.sh");
     let move_script = script_dir.join("move-sidebar-to-current.sh");
+    let window_close_script = script_dir.join("check-sidebar-window-close.sh");
     
     std::fs::write(&toggle_script, TOGGLE_SCRIPT)?;
     std::fs::write(&move_script, MOVE_SCRIPT)?;
+    std::fs::write(&window_close_script, WINDOW_CLOSE_SCRIPT)?;
     
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
         std::fs::set_permissions(&toggle_script, std::fs::Permissions::from_mode(0o755))?;
         std::fs::set_permissions(&move_script, std::fs::Permissions::from_mode(0o755))?;
+        std::fs::set_permissions(&window_close_script, std::fs::Permissions::from_mode(0o755))?;
     }
     
     println!("Installed scripts to:");
     println!("  {}", toggle_script.display());
     println!("  {}", move_script.display());
+    println!("  {}", window_close_script.display());
     println!();
     
     Ok(script_dir)
@@ -210,6 +215,7 @@ fn print_tmux_config() {
         Ok(script_dir) => {
             let toggle_script = script_dir.join("toggle-sidebar.sh");
             let move_script = script_dir.join("move-sidebar-to-current.sh");
+            let window_close_script = script_dir.join("check-sidebar-window-close.sh");
             
             println!("# Add the following to your ~/.tmux.conf:");
             println!();
@@ -218,6 +224,9 @@ fn print_tmux_config() {
             println!();
             println!("# Move sidebar to current window when switching windows");
             println!("set-hook -g session-window-changed 'run-shell \"{}\"'", move_script.display());
+            println!();
+            println!("# Close window when sidebar is the only pane left");
+            println!("set-hook -g pane-exited 'run-shell \"{}\"'", window_close_script.display());
             println!();
             println!("# After adding, reload tmux config with:");
             println!("tmux source ~/.tmux.conf");
