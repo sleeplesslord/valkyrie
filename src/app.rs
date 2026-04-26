@@ -247,6 +247,18 @@ impl App {
                 if let Some((agent_type, _)) = registry.detect(&pane) {
                     if !current_ids.contains(&pane.pane_id) {
                         new_agents.push(Agent::from_pane(&pane, agent_type));
+                    } else if let Some(existing) = self.agents.iter_mut().find(|a| a.pane_id == pane.pane_id) {
+                        let has_custom_name = self.state.get_name(&pane.pane_id)
+                            .map(|n| !n.is_empty())
+                            .unwrap_or(false);
+                        if !has_custom_name {
+                            let new_name = if pane.pane_title.is_empty() || pane.pane_title == pane.current_command {
+                                pane.current_command.clone()
+                            } else {
+                                pane.pane_title.clone()
+                            };
+                            existing.name = new_name;
+                        }
                     }
                 }
             }
