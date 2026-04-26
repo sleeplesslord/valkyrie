@@ -43,6 +43,11 @@ main() {
     
     if [[ "$sidebar_window" != "$current_window" ]]; then
         tmux join-pane -hb -l "$SIDEBAR_WIDTH" -s "$sidebar_pane" -t "$current_window" 2>/dev/null
+        local other_pane
+        other_pane=$(tmux list-panes -t "$current_window" -F '#{pane_id}' | grep -v "^${sidebar_pane}$" | head -1)
+        if [[ -n "$other_pane" ]]; then
+            tmux select-pane -t "$other_pane"
+        fi
     fi
 }
 
