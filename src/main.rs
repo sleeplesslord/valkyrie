@@ -379,6 +379,9 @@ async fn run_app(
             Some(Event::Tick) => {
                 app.tick();
             }
+            Some(Event::Resize(_w, _h)) => {
+                let _ = terminal.autoresize();
+            }
             None => {}
         }
     }

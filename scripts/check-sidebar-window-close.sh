@@ -1,6 +1,7 @@
 #!/bin/bash
 
 SIDEBAR_STATE="$HOME/.agent-sidebar/sidebar-pane"
+SIDEBAR_WIDTH="30"
 
 sidebar_pane_exists() {
     local pane_id="$1"
@@ -60,7 +61,9 @@ main() {
         local other_window
         other_window=$(get_other_window "$window_id")
         if [[ -n "$other_window" ]]; then
-            tmux join-pane -hb -l 30 -s "$pane_id" -t "$other_window" 2>/dev/null
+            tmux join-pane -hb -l "$SIDEBAR_WIDTH" -s "$pane_id" -t "$other_window" 2>/dev/null
+            sleep 0.05
+            tmux resize-pane -t "$pane_id" -x "$SIDEBAR_WIDTH"
             tmux kill-window -t "$window_id" 2>/dev/null
         else
             tmux kill-window -t "$window_id" 2>/dev/null

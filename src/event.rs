@@ -7,6 +7,7 @@ use tokio::time::interval;
 pub enum Event {
     Key(KeyEvent),
     Tick,
+    Resize(u16, u16),
 }
 
 pub struct EventStream {
@@ -32,9 +33,16 @@ impl EventStream {
         tokio::spawn(async move {
             loop {
                 if event::poll(Duration::from_millis(100)).unwrap_or(false) {
-                    if let Ok(CrosstermEvent::Key(key)) = event::read() {
-                        if input_tx.send(Event::Key(key)).is_err() {
-                            break;
+                    if let Ok(ev) = event::read() {
+                        let msg = match ev {
+                            CrosstermEvent::Key(key) => Some(Event::Key(key)),
+                            CrosstermEvent::Resize(w, h) => Some(Event::Resize(w, h)),
+                            _ => None,
+                        };
+                        if let Some(event) = msg {
+                            if input_tx.send(event).is_err() {
+                                break;
+                            }
                         }
                     }
                 }
