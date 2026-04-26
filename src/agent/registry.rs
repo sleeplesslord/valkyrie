@@ -44,33 +44,6 @@ impl Default for AgentRegistry {
 pub fn create_default_registry() -> AgentRegistry {
     let mut registry = AgentRegistry::new();
     registry.register(super::opencode::OpencodeDetector);
-    registry.register(GenericDetector);
+    registry.register(super::claude::ClaudeDetector);
     registry
-}
-
-struct GenericDetector;
-
-impl AgentDetector for GenericDetector {
-    fn detect(&self, pane: &PaneInfo) -> Option<AgentType> {
-        let cmd = pane.current_command.to_lowercase();
-        let title = pane.pane_title.to_lowercase();
-        
-        if cmd.contains("opencode") || title.contains("opencode") {
-            return None;
-        }
-        if cmd.contains("claude") || title.contains("claude") {
-            return Some(AgentType::ClaudeCode);
-        }
-        if cmd.contains("aider") || title.contains("aider") {
-            return Some(AgentType::Aider);
-        }
-        if title.contains("agent") || cmd.contains("agent") {
-            return Some(AgentType::Generic);
-        }
-        None
-    }
-
-    fn parse_status(&self, _pane_content: &str) -> AgentStatus {
-        AgentStatus::Unknown
-    }
 }

@@ -1,3 +1,4 @@
+mod claude;
 mod model;
 mod opencode;
 pub mod registry;

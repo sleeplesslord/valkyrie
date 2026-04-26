@@ -7,8 +7,6 @@ use chrono::{DateTime, Utc};
 pub enum AgentType {
     Opencode,
     ClaudeCode,
-    Aider,
-    Generic,
 }
 
 impl std::fmt::Display for AgentType {
@@ -16,8 +14,6 @@ impl std::fmt::Display for AgentType {
         match self {
             AgentType::Opencode => write!(f, "opencode"),
             AgentType::ClaudeCode => write!(f, "claude-code"),
-            AgentType::Aider => write!(f, "aider"),
-            AgentType::Generic => write!(f, "generic"),
         }
     }
 }

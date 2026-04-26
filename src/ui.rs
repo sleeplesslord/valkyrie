@@ -97,8 +97,6 @@ fn render_agent_list(f: &mut Frame, app: &App, area: Rect) {
             let type_indicator = match agent.agent_type {
                 crate::agent::AgentType::Opencode => "O",
                 crate::agent::AgentType::ClaudeCode => "C",
-                crate::agent::AgentType::Aider => "A",
-                crate::agent::AgentType::Generic => "G",
             };
             
             let name = truncate_str(&agent.name, 12);

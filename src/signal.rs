@@ -1,4 +1,4 @@
-use crate::agent::{AgentStatus, AgentType};
+use crate::agent::AgentStatus;
 use anyhow::Result;
 use chrono::{DateTime, Utc};
 use notify::{Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
@@ -48,15 +48,6 @@ impl SignalFile {
             Some("error") => AgentStatus::Error,
             Some("completed") => AgentStatus::Idle,
             _ => AgentStatus::Unknown,
-        }
-    }
-
-    pub fn to_agent_type(&self) -> Option<AgentType> {
-        match self.agent_type.as_deref() {
-            Some("opencode") => Some(AgentType::Opencode),
-            Some("claude-code") => Some(AgentType::ClaudeCode),
-            Some("aider") => Some(AgentType::Aider),
-            _ => None,
         }
     }
 
