@@ -33,6 +33,22 @@ async function findWorktree(filePath) {
   }
 }
 
+function extractFilePath(tool, args) {
+  if (!args) return null;
+  switch (tool) {
+    case "read":
+    case "edit":
+      return args.filePath || null;
+    case "write":
+      return args.filePath || null;
+    case "glob":
+    case "grep":
+      return args.path || args.include || null;
+    default:
+      return null;
+  }
+}
+
 async function fetchSagaInfo(sagaIds) {
   const sagas = [];
   for (const id of sagaIds) {
@@ -62,7 +78,7 @@ export default async function AgentSidebarPlugin(ctx) {
 
   const signalPath = join(SIGNAL_DIR, `${paneId}.json`);
   let currentFile = null;
-  let currentWorktree = null;
+  let currentWorktree = ctx.worktree || null;
   let lastStatus = "idle";
   let currentActivity = null;
   let currentTool = null;
@@ -156,7 +172,10 @@ export default async function AgentSidebarPlugin(ctx) {
 
   async function fetchSessionLabel() {
     try {
-      const result = await ctx.client.session.list();
+      const result = await Promise.race([
+        ctx.client.session.list(),
+        new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 5000)),
+      ]);
       const sessions = result.data;
       if (sessions && sessions.length > 0) {
         const latest = sessions[sessions.length - 1];
@@ -168,7 +187,7 @@ export default async function AgentSidebarPlugin(ctx) {
     } catch {}
   }
 
-  await fetchSessionLabel();
+  fetchSessionLabel();
   await writeSignal("idle");
 
   const HEARTBEAT_INTERVAL = 15000;
@@ -250,6 +269,12 @@ export default async function AgentSidebarPlugin(ctx) {
       if (input.tool === "bash" && output.args?.command) {
         const found = extractSagaIds(output.args.command);
         if (found) sagaRefreshNeeded = true;
+      }
+      const filePath = extractFilePath(input.tool, output.args);
+      if (filePath) {
+        currentFile = filePath;
+        const wt = await findWorktree(filePath);
+        if (wt) currentWorktree = wt;
       }
       await writeSignal();
     },

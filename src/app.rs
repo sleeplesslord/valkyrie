@@ -102,8 +102,6 @@ impl App {
         for agent in &mut self.agents {
             if let Some(wt) = self.worktree_cache.find_worktree(&agent.working_dir) {
                 agent.worktree = Some(wt.relative.clone());
-            } else {
-                agent.worktree = None;
             }
         }
     }
@@ -172,10 +170,12 @@ impl App {
             }
             
             if let Some(worktree_path) = self.signal_watcher.get_worktree(&agent.pane_id) {
+                agent.working_dir = worktree_path.clone();
                 if let Some(root) = self.worktree_cache.root() {
                     let wt_path = std::path::PathBuf::from(&worktree_path);
                     if let Ok(relative) = wt_path.strip_prefix(root) {
-                        agent.worktree = Some(relative.to_string_lossy().to_string());
+                        let rel = relative.to_string_lossy().to_string();
+                        agent.worktree = if rel.is_empty() { None } else { Some(rel) };
                     } else {
                         agent.worktree = Some(worktree_path);
                     }
