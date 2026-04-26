@@ -1,4 +1,4 @@
-use crate::agent::model::{AgentStatus, AgentType};
+use crate::agent::model::{AgentType};
 use crate::tmux::PaneInfo;
 use crate::agent::registry::AgentDetector;
 
@@ -14,33 +14,5 @@ impl AgentDetector for OpencodeDetector {
         } else {
             None
         }
-    }
-
-    fn parse_status(&self, pane_content: &str) -> AgentStatus {
-        let content = pane_content.to_lowercase();
-        
-        if content.contains("waiting for input") 
-            || content.contains("press enter")
-            || content.contains("continue?")
-        {
-            return AgentStatus::WaitingInput;
-        }
-        
-        if content.contains("error") || content.contains("failed") {
-            return AgentStatus::Error;
-        }
-        
-        if content.contains("thinking") 
-            || content.contains("processing")
-            || content.contains("working on")
-        {
-            return AgentStatus::Running;
-        }
-        
-        if content.contains("idle") || content.contains("ready") {
-            return AgentStatus::Idle;
-        }
-        
-        AgentStatus::Unknown
     }
 }

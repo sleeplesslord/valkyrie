@@ -120,24 +120,6 @@ impl Tmux {
         Ok(())
     }
 
-    pub fn capture_pane(&self, pane_id: &str, lines: usize) -> Result<String> {
-        let output = Command::new("tmux")
-            .args([
-                "capture-pane",
-                "-t", pane_id,
-                "-p",
-                "-S", &format!("-{}", lines),
-                "-E", "-",
-            ])
-            .output()?;
-
-        if !output.status.success() {
-            anyhow::bail!("Failed to capture pane {}", pane_id);
-        }
-
-        Ok(String::from_utf8_lossy(&output.stdout).to_string())
-    }
-
     pub fn get_current_window(&self) -> Result<String> {
         let output = Command::new("tmux")
             .args(["display-message", "-p", "#{window_id}"])

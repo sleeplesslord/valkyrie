@@ -1,4 +1,4 @@
-use crate::agent::model::{AgentStatus, AgentType};
+use crate::agent::model::{AgentType};
 use crate::tmux::PaneInfo;
 use crate::agent::registry::AgentDetector;
 
@@ -14,9 +14,5 @@ impl AgentDetector for ClaudeDetector {
         } else {
             None
         }
-    }
-
-    fn parse_status(&self, _pane_content: &str) -> AgentStatus {
-        AgentStatus::Unknown
     }
 }

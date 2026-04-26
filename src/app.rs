@@ -36,7 +36,6 @@ pub struct App {
 
 const PANE_DISCOVERY_INTERVAL: u64 = 20;
 const GIT_DIFF_INTERVAL: u64 = 40;
-const PANE_CONTENT_INTERVAL: u64 = 12;
 const WORKTREE_REFRESH_INTERVAL: u64 = 200;
 
 impl App {
@@ -93,10 +92,6 @@ impl App {
             self.update_git_diffs();
         }
 
-        if self.tick_count % PANE_CONTENT_INTERVAL == 0 {
-            self.update_from_pane_content();
-        }
-
         if self.tick_count % WORKTREE_REFRESH_INTERVAL == 0 {
             self.worktree_cache.refresh();
             self.update_worktrees();
@@ -132,52 +127,6 @@ impl App {
         });
         
         result
-    }
-
-    fn update_from_pane_content(&mut self) {
-        for agent in &mut self.agents {
-            if agent.status == AgentStatus::Unknown || agent.status == AgentStatus::Idle {
-                if let Ok(content) = self.tmux.capture_pane(&agent.pane_id, 50) {
-                    let fallback_status = Self::parse_pane_content(&content);
-                    if fallback_status != AgentStatus::Unknown {
-                        agent.status = fallback_status;
-                    }
-                }
-            }
-        }
-    }
-
-    fn parse_pane_content(content: &str) -> AgentStatus {
-        let content_lower = content.to_lowercase();
-        
-        if content_lower.contains("waiting for input") 
-            || content_lower.contains("press enter")
-            || content_lower.contains("continue?")
-            || content_lower.contains("(y/n)")
-        {
-            return AgentStatus::WaitingInput;
-        }
-        
-        if content_lower.contains("error") || content_lower.contains("failed") {
-            return AgentStatus::Error;
-        }
-        
-        if content_lower.contains("thinking") 
-            || content_lower.contains("processing")
-            || content_lower.contains("working on")
-            || content_lower.contains("analyzing")
-        {
-            return AgentStatus::Running;
-        }
-        
-        if content_lower.contains("idle") 
-            || content_lower.contains("ready")
-            || content_lower.contains("waiting")
-        {
-            return AgentStatus::Idle;
-        }
-        
-        AgentStatus::Unknown
     }
 
     fn update_git_diffs(&mut self) {
@@ -244,7 +193,7 @@ impl App {
 
                 all_pane_ids.insert(pane.pane_id.clone());
 
-                if let Some((agent_type, _)) = registry.detect(&pane) {
+                if let Some(agent_type) = registry.detect(&pane) {
                     if !current_ids.contains(&pane.pane_id) {
                         new_agents.push(Agent::from_pane(&pane, agent_type));
                     } else if let Some(existing) = self.agents.iter_mut().find(|a| a.pane_id == pane.pane_id) {

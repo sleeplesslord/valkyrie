@@ -1,9 +1,8 @@
-use crate::agent::model::{AgentStatus, AgentType};
+use crate::agent::model::AgentType;
 use crate::tmux::PaneInfo;
 
 pub trait AgentDetector: Send + Sync {
     fn detect(&self, pane: &PaneInfo) -> Option<AgentType>;
-    fn parse_status(&self, pane_content: &str) -> AgentStatus;
 }
 
 pub struct AgentRegistry {
@@ -21,10 +20,10 @@ impl AgentRegistry {
         self.detectors.push(Box::new(detector));
     }
 
-    pub fn detect(&self, pane: &PaneInfo) -> Option<(AgentType, &dyn AgentDetector)> {
+    pub fn detect(&self, pane: &PaneInfo) -> Option<AgentType> {
         for detector in &self.detectors {
             if let Some(agent_type) = detector.detect(pane) {
-                return Some((agent_type, detector.as_ref()));
+                return Some(agent_type);
             }
         }
         None
