@@ -161,6 +161,15 @@ impl App {
             agent.activity = self.signal_watcher.get_activity(&agent.pane_id);
             agent.tool_executing = self.signal_watcher.get_tool_executing(&agent.pane_id);
             agent.sagas = self.signal_watcher.get_sagas(&agent.pane_id);
+
+            if let Some(label) = self.signal_watcher.get_label(&agent.pane_id) {
+                let has_custom_name = self.state.get_name(&agent.pane_id)
+                    .map(|n| !n.is_empty())
+                    .unwrap_or(false);
+                if !has_custom_name {
+                    agent.name = label;
+                }
+            }
             
             if let Some(worktree_path) = self.signal_watcher.get_worktree(&agent.pane_id) {
                 if let Some(root) = self.worktree_cache.root() {

@@ -26,6 +26,7 @@ pub struct SignalFile {
     pub task: Option<String>,
     pub activity: Option<String>,
     pub tool_executing: Option<String>,
+    pub label: Option<String>,
     pub working_dir: Option<String>,
     pub worktree: Option<String>,
     pub current_file: Option<String>,
@@ -188,6 +189,13 @@ impl SignalWatcher {
             .get(pane_id)
             .filter(|s| !s.is_stale())
             .and_then(|s| s.tool_executing.clone())
+    }
+
+    pub fn get_label(&self, pane_id: &str) -> Option<String> {
+        self.signals
+            .get(pane_id)
+            .filter(|s| !s.is_stale())
+            .and_then(|s| s.label.clone())
     }
 
     pub fn get_sagas(&self, pane_id: &str) -> Vec<SagaInfo> {

@@ -67,6 +67,7 @@ export default async function AgentSidebarPlugin(ctx) {
   let currentActivity = null;
   let currentTool = null;
   let currentTask = null;
+  let currentLabel = null;
   const trackedSagas = new Map();
   let sagaRefreshNeeded = false;
   let lastSagaRefresh = 0;
@@ -131,6 +132,7 @@ export default async function AgentSidebarPlugin(ctx) {
         activity: currentActivity,
         tool_executing: currentTool,
         task: currentTask,
+        label: currentLabel,
         working_dir: ctx.directory,
         worktree: currentWorktree,
         current_file: currentFile,
@@ -152,6 +154,21 @@ export default async function AgentSidebarPlugin(ctx) {
   process.on("SIGTERM", cleanup);
   process.on("SIGINT", cleanup);
 
+  async function fetchSessionLabel() {
+    try {
+      const result = await ctx.client.session.list();
+      const sessions = result.data;
+      if (sessions && sessions.length > 0) {
+        const latest = sessions[sessions.length - 1];
+        if (latest.title && latest.title !== currentLabel) {
+          currentLabel = latest.title;
+          await writeSignal();
+        }
+      }
+    } catch {}
+  }
+
+  await fetchSessionLabel();
   await writeSignal("idle");
 
   const HEARTBEAT_INTERVAL = 15000;
@@ -170,6 +187,15 @@ export default async function AgentSidebarPlugin(ctx) {
           }
           break;
           
+        case "session.updated": {
+          const session = event.properties;
+          if (session && session.title && session.title !== currentLabel) {
+            currentLabel = session.title;
+            await writeSignal();
+          }
+          break;
+        }
+
         case "session.idle":
           currentActivity = null;
           currentTool = null;
