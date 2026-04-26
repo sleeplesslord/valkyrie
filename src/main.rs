@@ -20,7 +20,9 @@ use crossterm::{
 use event::Event;
 use ratatui::{backend::CrosstermBackend, Terminal};
 use state::Config;
+use std::fs::OpenOptions;
 use std::io;
+use std::os::unix::io::AsRawFd;
 use std::path::PathBuf;
 
 const SIDEBAR_STATE_FILE: &str = "sidebar-pane";
@@ -238,9 +240,30 @@ fn print_tmux_config() {
     }
 }
 
+fn init_logging() -> Result<()> {
+    let log_dir = dirs::home_dir()
+        .unwrap_or_else(|| PathBuf::from("~"))
+        .join(".agent-sidebar");
+    std::fs::create_dir_all(&log_dir)?;
+
+    let log_path = log_dir.join("sidebar.log");
+    let file = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&log_path)?;
+
+    unsafe {
+        libc::dup2(file.as_raw_fd(), libc::STDERR_FILENO);
+    }
+
+    Ok(())
+}
+
 async fn run_tui(width: u16) -> Result<()> {
     check_tmux()?;
     let _width = width;
+
+    init_logging()?;
 
     if let Some(pane_id) = tmux::Tmux::current_pane_id() {
         write_sidebar_state(&pane_id)?;

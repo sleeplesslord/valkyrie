@@ -14,3 +14,4 @@ chrono = { version = "0.4", features = ["serde"] }
 notify = "7"
 anyhow = "1"
 dirs = "6"
+libc = "0.2"
