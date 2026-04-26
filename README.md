@@ -1,4 +1,4 @@
-# agent-sidebar
+# valkyrie
 
 A tmux sidebar TUI for tracking coding agents in real-time.
 
@@ -17,7 +17,7 @@ A tmux sidebar TUI for tracking coding agents in real-time.
 
 ```bash
 cargo install --path .
-agent-sidebar install
+valkyrie install
 ```
 
 Restart opencode after installation.
@@ -28,7 +28,7 @@ To enable the sidebar to follow you when switching windows and toggle visibility
 
 ```bash
 # Install scripts and print tmux config
-agent-sidebar setup-tmux
+valkyrie setup-tmux
 
 # Add the printed config to ~/.tmux.conf, then reload
 tmux source ~/.tmux.conf
@@ -44,13 +44,13 @@ After setup:
 
 ```bash
 # Run the sidebar (must be in tmux)
-agent-sidebar
+valkyrie
 
 # Configure worktree root for grouping
-agent-sidebar config set-worktree-root /path/to/project
+valkyrie config set-worktree-root /path/to/project
 
 # Show current config
-agent-sidebar config show
+valkyrie config show
 ```
 
 ## Keybindings

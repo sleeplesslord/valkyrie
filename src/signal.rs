@@ -8,7 +8,7 @@ use std::path::PathBuf;
 use std::sync::mpsc::{channel, Receiver};
 use std::time::Duration;
 
-const SIGNAL_DIR: &str = ".agent-sidebar/agents";
+const SIGNAL_DIR: &str = ".valkyrie/agents";
 const STALE_THRESHOLD_SECS: i64 = 60;
 
 #[derive(Debug, Clone, Deserialize)]

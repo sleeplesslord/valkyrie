@@ -134,7 +134,7 @@ pub enum Mode {
 
 ### Local State File
 
-Location: `~/.agent-sidebar/state.json`
+Location: `~/.valkyrie/state.json`
 
 ```json
 {
@@ -158,6 +158,6 @@ Used for:
 
 ### Signal Files
 
-Location: `~/.agent-sidebar/agents/<pane-id>.json`
+Location: `~/.valkyrie/agents/<pane-id>.json`
 
 See [signal-protocol.md](./signal-protocol.md) for full specification.

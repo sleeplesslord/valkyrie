@@ -1,6 +1,6 @@
 #!/bin/bash
 
-SIDEBAR_STATE="$HOME/.agent-sidebar/sidebar-pane"
+SIDEBAR_STATE="$HOME/.valkyrie/sidebar-pane"
 SIDEBAR_WIDTH="30"
 
 get_current_session() {
@@ -94,7 +94,7 @@ spawn_sidebar() {
     leftmost_pane=$(tmux list-panes -F '#{pane_left} #{pane_id}' | sort -n | head -1 | awk '{print $2}')
 
     local sidebar_pane
-    sidebar_pane=$(tmux split-window -hb -l "$SIDEBAR_WIDTH" -c "$current_path" -t "$leftmost_pane" -P -F '#{pane_id}' "agent-sidebar")
+    sidebar_pane=$(tmux split-window -hb -l "$SIDEBAR_WIDTH" -c "$current_path" -t "$leftmost_pane" -P -F '#{pane_id}' "valkyrie")
 
     local current_window
     current_window=$(get_current_window)

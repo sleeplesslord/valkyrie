@@ -32,7 +32,7 @@ const MOVE_SCRIPT: &str = include_str!("../scripts/move-sidebar-to-current.sh");
 const WINDOW_CLOSE_SCRIPT: &str = include_str!("../scripts/check-sidebar-window-close.sh");
 
 #[derive(Parser, Debug)]
-#[command(name = "agent-sidebar")]
+#[command(name = "valkyrie")]
 #[command(about = "A tmux sidebar for tracking coding agents", long_about = None)]
 #[command(version)]
 struct Args {
@@ -54,7 +54,7 @@ enum Commands {
     Uninstall,
     #[command(about = "Check plugin installation status")]
     Status,
-    #[command(about = "Configure agent-sidebar")]
+    #[command(about = "Configure valkyrie")]
     Config {
         #[command(subcommand)]
         command: ConfigCommands,
@@ -78,7 +78,7 @@ enum ConfigCommands {
 
 fn check_tmux() -> Result<()> {
     if std::env::var("TMUX").is_err() {
-        anyhow::bail!("Not running in a tmux session. agent-sidebar must be launched inside tmux.");
+        anyhow::bail!("Not running in a tmux session. valkyrie must be launched inside tmux.");
     }
     Ok(())
 }
@@ -159,7 +159,7 @@ fn handle_config_command(command: ConfigCommands) -> Result<()> {
 fn get_sidebar_state_path() -> PathBuf {
     dirs::home_dir()
         .unwrap_or_else(|| PathBuf::from("~"))
-        .join(".agent-sidebar")
+        .join(".valkyrie")
         .join(SIDEBAR_STATE_FILE)
 }
 
@@ -243,7 +243,7 @@ fn print_tmux_config() {
 fn init_logging() -> Result<()> {
     let log_dir = dirs::home_dir()
         .unwrap_or_else(|| PathBuf::from("~"))
-        .join(".agent-sidebar");
+        .join(".valkyrie");
     std::fs::create_dir_all(&log_dir)?;
 
     let log_path = log_dir.join("sidebar.log");

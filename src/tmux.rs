@@ -260,7 +260,7 @@ mod tests {
     #[test]
     fn test_parse_pane_line_inactive() {
         let tmux = Tmux::new();
-        let line = "main:@1:%1|agent-sidebar|agent-sidebar|/home/user/project|0";
+        let line = "main:@1:%1|valkyrie|valkyrie|/home/user/project|0";
         let pane = tmux.parse_pane_line(line).unwrap();
         
         assert!(!pane.is_active);

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-SIDEBAR_STATE="$HOME/.agent-sidebar/sidebar-pane"
+SIDEBAR_STATE="$HOME/.valkyrie/sidebar-pane"
 SIDEBAR_WIDTH="30"
 
 sidebar_pane_exists() {

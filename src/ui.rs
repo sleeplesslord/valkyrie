@@ -39,7 +39,7 @@ pub fn render(f: &mut Frame, app: &App) {
 
 fn render_header(f: &mut Frame, app: &App, area: Rect) {
     let title = match app.mode {
-        Mode::Normal => " agent-sidebar ",
+        Mode::Normal => " valkyrie ",
         Mode::Rename { .. } => " rename agent ",
         Mode::Help => " help ",
         Mode::DiffView { .. } => " diff view ",

@@ -4,7 +4,7 @@ use std::fs;
 use std::io::Write;
 use std::path::PathBuf;
 
-const PLUGIN_NAME: &str = "agent-sidebar";
+const PLUGIN_NAME: &str = "valkyrie";
 
 const PLUGIN_INDEX_JS: &str = include_str!("../plugin/index.js");
 const PLUGIN_PACKAGE_JSON: &str = include_str!("../plugin/package.json");
@@ -129,7 +129,7 @@ pub fn status() -> Result<()> {
         }
         (true, false) => {
             println!("Status: installed but NOT registered in opencode.json");
-            println!("Run 'agent-sidebar install' to register.");
+            println!("Run 'valkyrie install' to register.");
         }
         (false, _) => {
             println!("Status: not installed");

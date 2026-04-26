@@ -5,7 +5,7 @@
 ### Launch Command
 
 ```bash
-tmux split-window -hb -l 30 -c "#{pane_current_path}" "agent-sidebar"
+tmux split-window -hb -l 30 -c "#{pane_current_path}" "valkyrie"
 ```
 
 | Flag | Purpose |
@@ -21,7 +21,7 @@ When launched, sidebar should:
 1. Check if already in tmux session
 2. If not, show error and exit
 3. Spawn as new pane in current window
-4. Set pane title to "agent-sidebar"
+4. Set pane title to "valkyrie"
 
 ## Pane Discovery
 
@@ -34,7 +34,7 @@ tmux list-panes -a -F '#{session_name}:#{window_id}:#{pane_id}|#{pane_title}|#{p
 Output format:
 ```
 main:@0:%0|zsh|zsh|/home/user/project|1
-main:@1:%1|agent-sidebar|agent-sidebar|/home/user/project|0
+main:@1:%1|valkyrie|valkyrie|/home/user/project|0
 ```
 
 ### Filter for Agent Panes
@@ -77,7 +77,7 @@ tmux rename-window -t <window_id> "<new_name>"
 tmux select-pane -t <pane_id> -T "<new_title>"
 ```
 
-Note: User-renamed names stored in `~/.agent-sidebar/state.json` for persistence.
+Note: User-renamed names stored in `~/.valkyrie/state.json` for persistence.
 
 ## Sidebar Cleanup
 
@@ -115,7 +115,7 @@ TMUX=/tmp/tmux-1000/default,1234,0
 
 ### Quick Setup
 
-Run `agent-sidebar setup-tmux` to print the recommended configuration. Add the output to `~/.tmux.conf` and reload with `tmux source ~/.tmux.conf`.
+Run `valkyrie setup-tmux` to print the recommended configuration. Add the output to `~/.tmux.conf` and reload with `tmux source ~/.tmux.conf`.
 
 ### Toggle Sidebar
 
@@ -125,7 +125,7 @@ The `toggle-sidebar.sh` script provides toggle functionality:
 - If sidebar exists in current window: hides it (moves to hidden window)
 - If sidebar exists in different window: moves it to current window
 
-State is tracked in `~/.agent-sidebar/sidebar-pane`.
+State is tracked in `~/.valkyrie/sidebar-pane`.
 
 ### Window Switch Hook
 
@@ -149,7 +149,7 @@ For automatic sidebar on session creation:
 
 ```bash
 # In ~/.tmux.conf
-set-hook -g session-created 'split-window -hb -l 30 "agent-sidebar"'
+set-hook -g session-created 'split-window -hb -l 30 "valkyrie"'
 ```
 
 Note: Currently not recommended; manual launch preferred.

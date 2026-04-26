@@ -7,7 +7,7 @@ Signal files provide a cooperative communication channel between agents and the 
 ## Directory Structure
 
 ```
-~/.agent-sidebar/
+~/.valkyrie/
 ├── state.json              # Sidebar state (user names, history)
 └── agents/
     ├── %0.json             # Status for pane %0
@@ -79,7 +79,7 @@ opencode should write signal updates when:
 
 Implementation approach:
 - Add hooks in opencode's event loop
-- Write to `~/.agent-sidebar/agents/<TMUX_PANE>.json`
+- Write to `~/.valkyrie/agents/<TMUX_PANE>.json`
 - Clean up file on exit
 
 ### Hook Implementation (Pseudocode)
@@ -87,7 +87,7 @@ Implementation approach:
 ```python
 def update_signal(status, task=None):
     pane_id = os.environ.get('TMUX_PANE', 'unknown')
-    signal_path = Path.home() / '.agent-sidebar' / 'agents' / f'{pane_id}.json'
+        signal_path = Path.home() / '.valkyrie' / 'agents' / f'{pane_id}.json'
     
     data = {
         'status': status,
@@ -117,7 +117,7 @@ Agents should remove their signal file on clean exit:
 def cleanup_signal():
     pane_id = os.environ.get('TMUX_PANE')
     if pane_id:
-        signal_path = Path.home() / '.agent-sidebar' / 'agents' / f'{pane_id}.json'
+    signal_path = Path.home() / '.valkyrie' / 'agents' / f'{pane_id}.json'
         signal_path.unlink(missing_ok=True)
 ```
 
@@ -126,7 +126,7 @@ def cleanup_signal():
 ### File Watching
 
 Using `notify` crate:
-1. Watch `~/.agent-sidebar/agents/` directory
+1. Watch `~/.valkyrie/agents/` directory
 2. On `Create` or `Modify` events: parse JSON, update agent status
 3. On `Remove` event: mark agent as offline (or remove if configured)
 

@@ -1,9 +1,9 @@
 {
-  "name": "@agent-sidebar/opencode-plugin",
+  "name": "@valkyrie/opencode-plugin",
   "version": "0.1.0",
-  "description": "opencode plugin for agent-sidebar TUI integration",
+  "description": "opencode plugin for valkyrie TUI integration",
   "main": "index.js",
   "type": "module",
-  "keywords": ["opencode", "plugin", "agent-sidebar"],
+  "keywords": ["opencode", "plugin", "valkyrie"],
   "license": "MIT"
 }

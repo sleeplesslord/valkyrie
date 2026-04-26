@@ -5,7 +5,7 @@ import { exec } from "child_process";
 import { promisify } from "util";
 
 const execAsync = promisify(exec);
-const SIGNAL_DIR = join(homedir(), ".agent-sidebar", "agents");
+const SIGNAL_DIR = join(homedir(), ".valkyrie", "agents");
 
 const TOOL_ACTIVITY = {
   read: "exploring",
@@ -138,7 +138,7 @@ export default async function AgentSidebarPlugin(ctx) {
         sagas: sagas.length > 0 ? sagas : undefined,
       }, null, 2));
     } catch (err) {
-      console.error("[agent-sidebar plugin] Failed to write signal:", err.message);
+      console.error("[valkyrie plugin] Failed to write signal:", err.message);
     }
   }
 

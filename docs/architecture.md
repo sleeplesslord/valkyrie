@@ -1,4 +1,4 @@
-# Agent Sidebar Architecture
+# Valkyrie Architecture
 
 A tmux sidebar TUI that tracks coding agent status in real-time.
 
@@ -32,7 +32,7 @@ A tmux sidebar TUI that tracks coding agent status in real-time.
 ## Project Structure
 
 ```
-agent-sidebar/
+valkyrie/
 ├── Cargo.toml
 ├── src/
 │   ├── main.rs            # CLI entry point, tmux setup, event loop
@@ -82,7 +82,7 @@ All tmux CLI operations:
 ### 4. Signal System (`signal.rs`)
 
 Hybrid status detection:
-- Primary: Watch `~/.agent-sidebar/agents/` for status files
+- Primary: Watch `~/.valkyrie/agents/` for status files
 - Fallback: Poll pane content via `tmux capture-pane`
 
 ### 5. Agent Registry (`agent/registry.rs`)

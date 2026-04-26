@@ -1,11 +1,11 @@
-# agent-sidebar opencode Plugin
+# valkyrie opencode Plugin
 
-This plugin integrates opencode with the agent-sidebar TUI, providing real-time status updates.
+This plugin integrates opencode with the valkyrie TUI, providing real-time status updates.
 
 ## Installation
 
 ```bash
-agent-sidebar install
+valkyrie install
 ```
 
 Restart opencode after installation.
@@ -13,13 +13,13 @@ Restart opencode after installation.
 ## Uninstallation
 
 ```bash
-agent-sidebar uninstall
+valkyrie uninstall
 ```
 
 ## Check Status
 
 ```bash
-agent-sidebar status
+valkyrie status
 ```
 
 ## How It Works
@@ -35,7 +35,7 @@ The plugin listens for opencode events and writes status updates to signal files
 | `permission.updated` | `waiting_input` |
 | Process exit | Signal file deleted |
 
-Signal files are written to `~/.agent-sidebar/agents/<pane-id>.json` and are automatically picked up by the agent-sidebar TUI.
+Signal files are written to `~/.valkyrie/agents/<pane-id>.json` and are automatically picked up by the valkyrie TUI.
 
 ## Requirements
 

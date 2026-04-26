@@ -3,8 +3,8 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-const STATE_FILE: &str = ".agent-sidebar/state.json";
-const CONFIG_FILE: &str = ".agent-sidebar/config.json";
+const STATE_FILE: &str = ".valkyrie/state.json";
+const CONFIG_FILE: &str = ".valkyrie/config.json";
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct AgentState {
