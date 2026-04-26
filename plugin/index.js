@@ -221,19 +221,19 @@ export default async function AgentSidebarPlugin(ctx) {
     "tool.execute.before": async (input, output) => {
       currentTool = input.tool;
       currentActivity = TOOL_ACTIVITY[input.tool] || "thinking";
-      if (input.tool === "bash" && input.command) {
-        const found = extractSagaIds(input.command);
+      if (input.tool === "bash" && output.args?.command) {
+        const found = extractSagaIds(output.args.command);
         if (found) sagaRefreshNeeded = true;
       }
       await writeSignal();
     },
 
-    "tool.execute.after": async (input) => {
-      if (input.tool === "bash" && input.command) {
+    "tool.execute.after": async (input, output) => {
+      if (input.tool === "bash" && input.args?.command) {
         SAGA_NEW_PATTERN.lastIndex = 0;
-        if (SAGA_NEW_PATTERN.test(input.command)) {
-          if (input.output) {
-            extractSagaIdFromOutput(input.output);
+        if (SAGA_NEW_PATTERN.test(input.args.command)) {
+          if (output.output) {
+            extractSagaIdFromOutput(output.output);
           }
           sagaRefreshNeeded = true;
         }
