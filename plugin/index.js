@@ -154,6 +154,9 @@ export default async function AgentSidebarPlugin(ctx) {
 
   await writeSignal("idle");
 
+  const HEARTBEAT_INTERVAL = 15000;
+  setInterval(() => writeSignal(), HEARTBEAT_INTERVAL);
+
   return {
     async event({ event }) {
       switch (event.type) {

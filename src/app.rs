@@ -235,16 +235,16 @@ impl App {
                 self.agents.iter().map(|a| a.pane_id.clone()).collect();
             
             let mut new_agents: Vec<Agent> = Vec::new();
-            let mut found_ids: std::collections::HashSet<String> = std::collections::HashSet::new();
+            let mut all_pane_ids: std::collections::HashSet<String> = std::collections::HashSet::new();
 
             for pane in panes {
                 if Some(&pane.pane_id) == self.sidebar_pane_id.as_ref() {
                     continue;
                 }
 
+                all_pane_ids.insert(pane.pane_id.clone());
+
                 if let Some((agent_type, _)) = registry.detect(&pane) {
-                    found_ids.insert(pane.pane_id.clone());
-                    
                     if !current_ids.contains(&pane.pane_id) {
                         new_agents.push(Agent::from_pane(&pane, agent_type));
                     }
@@ -252,8 +252,11 @@ impl App {
             }
 
             for agent in &mut self.agents {
-                if !found_ids.contains(&agent.pane_id) {
-                    agent.status = AgentStatus::Offline;
+                if !all_pane_ids.contains(&agent.pane_id) {
+                    let signal_status = self.signal_watcher.get_status(&agent.pane_id);
+                    if signal_status == AgentStatus::Unknown {
+                        agent.status = AgentStatus::Offline;
+                    }
                 }
             }
 
