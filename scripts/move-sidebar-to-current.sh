@@ -29,6 +29,25 @@ get_pane_window() {
     tmux list-panes -a -F '#{pane_id}:#{window_id}' 2>/dev/null | grep "^${pane_id}:" | cut -d: -f2
 }
 
+redistribute_panes() {
+    local window_id="$1"
+    local sidebar_pane="$2"
+    local window_width
+    window_width=$(tmux display-message -t "$window_id" -p '#{window_width}')
+    local remaining=$((window_width - SIDEBAR_WIDTH))
+    local panes
+    panes=$(tmux list-panes -t "$window_id" -F '#{pane_id}' | grep -v "^${sidebar_pane}$")
+    local count
+    count=$(echo "$panes" | wc -l)
+    if [[ "$count" -eq 0 ]]; then
+        return
+    fi
+    local pane_width=$((remaining / count))
+    echo "$panes" | while read -r pane; do
+        tmux resize-pane -t "$pane" -x "$pane_width"
+    done
+}
+
 main() {
     local sidebar_pane
     sidebar_pane=$(get_sidebar_info)
@@ -45,16 +64,13 @@ main() {
         local active_pane
         active_pane=$(tmux display-message -p '#{pane_id}')
 
-        tmux join-pane -hb -l "$SIDEBAR_WIDTH" -s "$sidebar_pane" -t "$current_window" 2>/dev/null
-
         local leftmost_pane
         leftmost_pane=$(tmux list-panes -t "$current_window" -F '#{pane_left} #{pane_id}' | sort -n | head -1 | awk '{print $2}')
-        if [[ -n "$leftmost_pane" && "$leftmost_pane" != "$sidebar_pane" ]]; then
-            tmux swap-pane -s "$sidebar_pane" -t "$leftmost_pane"
-        fi
+
+        tmux join-pane -hb -l "$SIDEBAR_WIDTH" -s "$sidebar_pane" -t "$leftmost_pane" 2>/dev/null
 
         tmux resize-pane -t "$sidebar_pane" -x "$SIDEBAR_WIDTH"
-
+        redistribute_panes "$current_window" "$sidebar_pane"
         tmux select-pane -t "$active_pane"
     fi
 }
