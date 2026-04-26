@@ -47,9 +47,11 @@ redistribute_panes() {
     fi
 
     local pane_width=$((remaining / count))
+    local cmds="resize-pane -t ${sidebar_pane} -x ${SIDEBAR_WIDTH}"$'\n'
     for pane in "${panes[@]}"; do
-        tmux resize-pane -t "$pane" -x "$pane_width"
+        cmds+="resize-pane -t ${pane} -x ${pane_width}"$'\n'
     done
+    echo "$cmds" | tmux source-file -
 }
 
 main() {
@@ -75,7 +77,6 @@ main() {
 
         sleep 0.05
 
-        tmux resize-pane -t "$sidebar_pane" -x "$SIDEBAR_WIDTH"
         redistribute_panes "$current_window" "$sidebar_pane"
         tmux select-pane -t "$active_pane"
     fi

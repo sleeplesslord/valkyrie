@@ -63,8 +63,7 @@ main() {
         if [[ -n "$other_window" ]]; then
             tmux join-pane -hb -l "$SIDEBAR_WIDTH" -s "$pane_id" -t "$other_window" 2>/dev/null
             sleep 0.05
-            tmux resize-pane -t "$pane_id" -x "$SIDEBAR_WIDTH"
-            tmux kill-window -t "$window_id" 2>/dev/null
+            printf 'resize-pane -t %s -x %s\nkill-window -t %s\n' "$pane_id" "$SIDEBAR_WIDTH" "$window_id" | tmux source-file -
         else
             tmux kill-window -t "$window_id" 2>/dev/null
         fi

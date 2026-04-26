@@ -307,8 +307,15 @@ async fn run_app(
     app: &mut App,
     event_stream: &mut event::EventStream,
 ) -> Result<()> {
+    let mut resize_needed = false;
+
     loop {
         terminal.draw(|f| ui::render(f, app))?;
+
+        if resize_needed {
+            let _ = terminal.autoresize();
+            resize_needed = false;
+        }
 
         match event_stream.next().await {
             Some(Event::Key(key)) => {
@@ -380,7 +387,7 @@ async fn run_app(
                 app.tick();
             }
             Some(Event::Resize(_w, _h)) => {
-                let _ = terminal.autoresize();
+                resize_needed = true;
             }
             None => {}
         }
