@@ -166,7 +166,6 @@ export default async function AgentSidebarPlugin(ctx) {
             await writeSignal("running");
           } else {
             currentActivity = null;
-            currentTool = null;
             await writeSignal("idle");
           }
           break;
