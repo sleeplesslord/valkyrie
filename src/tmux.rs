@@ -24,6 +24,16 @@ impl Tmux {
         std::env::var("TMUX").is_ok()
     }
 
+    pub fn kill_pane(pane_id: &str) -> Result<()> {
+        let status = Command::new("tmux")
+            .args(["kill-pane", "-t", pane_id])
+            .status()?;
+        if !status.success() {
+            anyhow::bail!("Failed to kill pane {}", pane_id);
+        }
+        Ok(())
+    }
+
     pub fn current_pane_id() -> Option<String> {
         std::env::var("TMUX_PANE").ok()
     }

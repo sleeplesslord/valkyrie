@@ -258,6 +258,10 @@ async fn run_tui(width: u16) -> Result<()> {
 
     let _ = clear_sidebar_state();
 
+    if let Some(pane_id) = tmux::Tmux::current_pane_id() {
+        let _ = tmux::Tmux::kill_pane(&pane_id);
+    }
+
     if let Err(err) = res {
         eprintln!("Error: {err:?}");
         return Err(err);
