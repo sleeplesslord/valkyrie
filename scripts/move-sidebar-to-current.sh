@@ -42,12 +42,20 @@ main() {
     current_window=$(get_current_window)
     
     if [[ "$sidebar_window" != "$current_window" ]]; then
+        local active_pane
+        active_pane=$(tmux display-message -p '#{pane_id}')
+
         tmux join-pane -hb -l "$SIDEBAR_WIDTH" -s "$sidebar_pane" -t "$current_window" 2>/dev/null
-        local other_pane
-        other_pane=$(tmux list-panes -t "$current_window" -F '#{pane_id}' | grep -v "^${sidebar_pane}$" | head -1)
-        if [[ -n "$other_pane" ]]; then
-            tmux select-pane -t "$other_pane"
+
+        local leftmost_pane
+        leftmost_pane=$(tmux list-panes -t "$current_window" -F '#{pane_left} #{pane_id}' | sort -n | head -1 | awk '{print $2}')
+        if [[ -n "$leftmost_pane" && "$leftmost_pane" != "$sidebar_pane" ]]; then
+            tmux swap-pane -s "$sidebar_pane" -t "$leftmost_pane"
         fi
+
+        tmux resize-pane -t "$sidebar_pane" -x "$SIDEBAR_WIDTH"
+
+        tmux select-pane -t "$active_pane"
     fi
 }
 
