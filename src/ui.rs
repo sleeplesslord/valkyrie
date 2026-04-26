@@ -58,6 +58,7 @@ fn render_agent_list(f: &mut Frame, app: &App, area: Rect) {
         return;
     }
 
+    let width = area.width as usize;
     let groups = app.agents_by_worktree();
     let mut items: Vec<ListItem> = Vec::new();
     let mut agent_index = 0;
@@ -74,71 +75,144 @@ fn render_agent_list(f: &mut Frame, app: &App, area: Rect) {
         }
 
         for agent in agents {
-            let base_style = match agent.status {
-                crate::agent::AgentStatus::Running => Style::default().fg(Color::Green),
-                crate::agent::AgentStatus::Idle => Style::default().fg(Color::Gray),
-                crate::agent::AgentStatus::WaitingInput => Style::default().fg(Color::Yellow),
-                crate::agent::AgentStatus::Error => Style::default().fg(Color::Red),
-                crate::agent::AgentStatus::Offline => Style::default().fg(Color::DarkGray),
-                crate::agent::AgentStatus::Unknown => Style::default().fg(Color::Blue),
+            let status_color = match agent.status {
+                crate::agent::AgentStatus::Running => Color::Green,
+                crate::agent::AgentStatus::Idle => Color::Gray,
+                crate::agent::AgentStatus::WaitingInput => Color::Yellow,
+                crate::agent::AgentStatus::Error => Color::Red,
+                crate::agent::AgentStatus::Offline => Color::DarkGray,
+                crate::agent::AgentStatus::Unknown => Color::Blue,
             };
 
             let is_selected = agent_index == app.selection;
-            let style = if is_selected {
-                base_style.bold()
-            } else {
-                base_style
+
+            let name_color = match agent.agent_type {
+                crate::agent::AgentType::Opencode => Color::Cyan,
+                crate::agent::AgentType::ClaudeCode => Color::Magenta,
             };
 
             let status_indicator = agent.status.indicator(
                 agent.activity.as_deref(),
                 agent.tool_executing.as_deref(),
             );
-            let type_indicator = match agent.agent_type {
-                crate::agent::AgentType::Opencode => "O",
-                crate::agent::AgentType::ClaudeCode => "C",
-            };
-            
-            let name = truncate_str(&agent.name, 12);
-            let task = agent.task_description.as_deref().map(|t| truncate_str(t, 15));
-            let diff = agent.diff_stats.as_ref().map(|d| d.to_string());
 
             let prefix = if worktree.is_some() { "  " } else { "" };
 
-            let content = match (task, diff) {
-                (Some(t), Some(d)) if !d.is_empty() => {
-                    format!("{}{} [{}] {} - {} [{}]", prefix, status_indicator, type_indicator, name, t, d)
-                }
-                (Some(t), _) => format!("{}{} [{}] {} - {}", prefix, status_indicator, type_indicator, name, t),
-                (None, Some(d)) if !d.is_empty() => {
-                    format!("{}{} [{}] {} [{}]", prefix, status_indicator, type_indicator, name, d)
-                }
-                _ => format!("{}{} [{}] {}", prefix, status_indicator, type_indicator, name),
+            let indicator_width = status_indicator.chars().count();
+            let name_max = width.saturating_sub(prefix.len() + indicator_width + 2);
+            let name = truncate_str(&agent.name, name_max);
+
+            let name_style = if is_selected {
+                Style::default().fg(name_color).bold()
+            } else {
+                Style::default().fg(name_color)
             };
 
-            items.push(ListItem::new(Line::from(Span::styled(content, style))));
+            let line1 = Line::from(vec![
+                Span::styled(format!("{}{} ", prefix, status_indicator), Style::default().fg(status_color)),
+                Span::styled(name, name_style),
+            ]);
+            items.push(ListItem::new(line1));
+
+            let has_task = agent.task_description.as_deref().map(|t| !t.is_empty()).unwrap_or(false);
+            let diff = agent.diff_stats.as_ref().map(|d| d.to_string());
+            let has_diff = diff.as_deref().map(|d| !d.is_empty()).unwrap_or(false);
+
+            if has_task || has_diff {
+                let indent = if worktree.is_some() { "    " } else { "  " };
+                let mut spans: Vec<Span> = vec![Span::styled(indent.to_string(), Style::default())];
+
+                if has_task && has_diff {
+                    let diff_str = diff.as_deref().unwrap_or("");
+                    let (additions, deletions) = parse_diff_stats(diff_str);
+                    let diff_display_len = if !additions.is_empty() && !deletions.is_empty() {
+                        additions.len() + 1 + deletions.len() + 3
+                    } else if !additions.is_empty() {
+                        additions.len() + 1
+                    } else if !deletions.is_empty() {
+                        deletions.len() + 1
+                    } else {
+                        0
+                    };
+                    let task_max = width.saturating_sub(indent.len() + diff_display_len + 1);
+                    let task = truncate_str(
+                        agent.task_description.as_deref().unwrap_or(""),
+                        task_max,
+                    );
+                    spans.push(Span::styled(task, Style::default().fg(Color::Gray)));
+                    if diff_display_len > 0 {
+                        spans.push(Span::styled(" ".to_string(), Style::default()));
+                    }
+                    if !additions.is_empty() {
+                        spans.push(Span::styled(
+                            format!("+{}", additions),
+                            Style::default().fg(Color::Green),
+                        ));
+                    }
+                    if !additions.is_empty() && !deletions.is_empty() {
+                        spans.push(Span::styled(" ".to_string(), Style::default()));
+                    }
+                    if !deletions.is_empty() {
+                        spans.push(Span::styled(
+                            format!("-{}", deletions),
+                            Style::default().fg(Color::Red),
+                        ));
+                    }
+                } else if has_task {
+                    let task_max = width.saturating_sub(indent.len());
+                    let task = truncate_str(
+                        agent.task_description.as_deref().unwrap_or(""),
+                        task_max,
+                    );
+                    spans.push(Span::styled(task, Style::default().fg(Color::Gray)));
+                } else if has_diff {
+                    let diff_str = diff.as_deref().unwrap_or("");
+                    let (additions, deletions) = parse_diff_stats(diff_str);
+                    if !additions.is_empty() {
+                        spans.push(Span::styled(
+                            format!("+{}", additions),
+                            Style::default().fg(Color::Green),
+                        ));
+                    }
+                    if !additions.is_empty() && !deletions.is_empty() {
+                        spans.push(Span::styled(" ".to_string(), Style::default()));
+                    }
+                    if !deletions.is_empty() {
+                        spans.push(Span::styled(
+                            format!("-{}", deletions),
+                            Style::default().fg(Color::Red),
+                        ));
+                    }
+                }
+
+                items.push(ListItem::new(Line::from(spans)));
+            }
+
             agent_index += 1;
 
             for saga in agent.sagas.iter().take(3) {
-                let saga_status_str = match saga.status.as_str() {
-                    "active" => "[active]",
-                    "claimed" => "[claimed]",
-                    "done" => "[done]",
-                    _ => "[?]",
+                let saga_indent = if worktree.is_some() { "      " } else { "    " };
+                let (saga_status_str, saga_status_color) = match saga.status.as_str() {
+                    "active" => ("●", Color::Green),
+                    "claimed" => ("◐", Color::Yellow),
+                    "done" => ("✓", Color::DarkGray),
+                    _ => ("?", Color::DarkGray),
                 };
-                let saga_style = match saga.status.as_str() {
-                    "active" => Style::default().fg(Color::Green),
-                    "claimed" => Style::default().fg(Color::Yellow),
-                    "done" => Style::default().fg(Color::DarkGray),
-                    _ => Style::default().fg(Color::DarkGray),
-                };
-                let saga_title = truncate_str(&saga.title, 20);
-                let saga_line = if worktree.is_some() {
-                    format!("    {} {}", saga_status_str, saga_title)
+                let saga_title_color = if saga.status.as_str() == "done" {
+                    Color::DarkGray
                 } else {
-                    format!("  {} {}", saga_status_str, saga_title)
+                    Color::Gray
                 };
-                items.push(ListItem::new(Line::from(Span::styled(saga_line, saga_style))));
+                let used = saga_indent.len() + saga_status_str.len() + 1;
+                let saga_title_max = width.saturating_sub(used);
+                let saga_title = truncate_str(&saga.title, saga_title_max);
+                let saga_line = Line::from(vec![
+                    Span::styled(saga_indent.to_string(), Style::default()),
+                    Span::styled(saga_status_str.to_string(), Style::default().fg(saga_status_color)),
+                    Span::styled(" ".to_string(), Style::default()),
+                    Span::styled(saga_title, Style::default().fg(saga_title_color)),
+                ]);
+                items.push(ListItem::new(saga_line));
             }
         }
 
@@ -156,11 +230,29 @@ fn render_agent_list(f: &mut Frame, app: &App, area: Rect) {
 }
 
 fn truncate_str(s: &str, max_len: usize) -> String {
-    if s.len() > max_len {
-        format!("{}…", &s[..max_len.saturating_sub(1)])
+    if max_len == 0 {
+        return String::new();
+    }
+    let display_len = s.chars().count();
+    if display_len > max_len {
+        let truncated: String = s.chars().take(max_len.saturating_sub(1)).collect();
+        format!("{}…", truncated)
     } else {
         s.to_string()
     }
+}
+
+fn parse_diff_stats(diff: &str) -> (String, String) {
+    let mut additions = String::new();
+    let mut deletions = String::new();
+    for part in diff.split_whitespace() {
+        if let Some(num) = part.strip_prefix('+') {
+            additions = num.to_string();
+        } else if let Some(num) = part.strip_prefix('-') {
+            deletions = num.to_string();
+        }
+    }
+    (additions, deletions)
 }
 
 fn render_footer(f: &mut Frame, app: &App, area: Rect) {
