@@ -116,20 +116,17 @@ TMUX=/tmp/tmux-1000/default,1234,0
 ### Quick Setup
 
 Run `valkyrie setup-tmux` to print the recommended configuration. Add the output to `~/.tmux.conf` and reload with `tmux source ~/.tmux.conf`.
+If you previously configured auto-follow, remove any `session-window-changed` hook that runs `move-sidebar-to-current.sh`.
 
 ### Toggle Sidebar
 
 The `toggle-sidebar.sh` script provides toggle functionality:
 
 - If no sidebar exists: spawns new sidebar pane
-- If sidebar exists in current window: hides it (moves to hidden window)
-- If sidebar exists in different window: moves it to current window
+- If sidebar exists in current window: hides it (moves to a detached hidden session)
+- If sidebar exists in different window or hidden session: moves it to current window
 
 State is tracked in `~/.valkyrie/sidebar-pane`.
-
-### Window Switch Hook
-
-The `move-sidebar-to-current.sh` script is triggered on `session-window-changed` hook to move the sidebar to the current window automatically.
 
 ### Manual Config
 
@@ -139,8 +136,8 @@ Users can add to `~/.tmux.conf`:
 # Toggle sidebar with prefix+s
 bind s run-shell "/path/to/toggle-sidebar.sh"
 
-# Move sidebar when switching windows
-set-hook -g session-window-changed 'run-shell "/path/to/move-sidebar-to-current.sh"'
+# Close window when sidebar is the only pane left
+set-hook -g pane-exited 'run-shell "/path/to/check-sidebar-window-close.sh"'
 ```
 
 ### Auto-start

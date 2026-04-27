@@ -2,10 +2,9 @@
 
 SIDEBAR_STATE="$HOME/.valkyrie/sidebar-pane"
 SIDEBAR_WIDTH="30"
-
-get_current_session() {
-    tmux display-message -p '#{session_name}'
-}
+SIDEBAR_HIDDEN_SESSION="__valkyrie_hidden__"
+SIDEBAR_HIDDEN_WINDOW="__sidebar_hidden__"
+SIDEBAR_HIDDEN_BOOTSTRAP="__valkyrie_bootstrap__"
 
 get_current_window() {
     tmux display-message -p '#{window_id}'
@@ -30,79 +29,56 @@ get_sidebar_info() {
 
 get_pane_window() {
     local pane_id="$1"
-    tmux list-panes -a -F '#{pane_id}:#{window_id}' 2>/dev/null | grep "^${pane_id}:" | cut -d: -f2
+    tmux display-message -p -t "$pane_id" '#{window_id}' 2>/dev/null
 }
 
-redistribute_panes() {
-    local window_id="$1"
-    local sidebar_pane="$2"
-    local window_width
-    window_width=$(tmux display-message -t "$window_id" -p '#{window_width}')
-    local remaining=$((window_width - SIDEBAR_WIDTH))
-
-    local panes=()
-    while IFS= read -r pane; do
-        [[ "$pane" != "$sidebar_pane" ]] && panes+=("$pane")
-    done < <(tmux list-panes -t "$window_id" -F '#{pane_id}')
-
-    local count=${#panes[@]}
-    if [[ "$count" -eq 0 ]]; then
-        return
+ensure_hidden_session() {
+    if tmux has-session -t "$SIDEBAR_HIDDEN_SESSION" 2>/dev/null; then
+        return 0
     fi
 
-    local pane_width=$((remaining / count))
-    local cmds="resize-pane -t ${sidebar_pane} -x ${SIDEBAR_WIDTH}"$'\n'
-    for pane in "${panes[@]}"; do
-        cmds+="resize-pane -t ${pane} -x ${pane_width}"$'\n'
-    done
-    echo "$cmds" | tmux source-file -
+    tmux new-session -d -s "$SIDEBAR_HIDDEN_SESSION" -n "$SIDEBAR_HIDDEN_BOOTSTRAP" >/dev/null 2>&1
+}
+
+cleanup_hidden_bootstrap() {
+    local window_count
+    window_count=$(tmux list-windows -t "$SIDEBAR_HIDDEN_SESSION" -F '#{window_id}' 2>/dev/null | wc -l | tr -d ' ')
+    if [[ "$window_count" -gt 1 ]]; then
+        tmux kill-window -t "$SIDEBAR_HIDDEN_SESSION:$SIDEBAR_HIDDEN_BOOTSTRAP" 2>/dev/null || true
+    fi
 }
 
 hide_sidebar() {
     local pane_id="$1"
-    local hidden_window
-    hidden_window=$(tmux new-window -P -F '#{window_id}' -n "__sidebar_hidden__")
-    tmux break-pane -s "$pane_id" -t "$hidden_window"
-    tmux select-window -t "$(get_current_window)"
+
+    ensure_hidden_session || return 1
+
+    tmux break-pane -d -s "$pane_id" -t "$SIDEBAR_HIDDEN_SESSION:" -n "$SIDEBAR_HIDDEN_WINDOW" 2>/dev/null || return 1
+    cleanup_hidden_bootstrap
 }
 
 show_sidebar_in_current_window() {
     local pane_id="$1"
     local current_window
     current_window=$(get_current_window)
-    local active_pane
-    active_pane=$(tmux display-message -p '#{pane_id}')
 
     local leftmost_pane
     leftmost_pane=$(tmux list-panes -t "$current_window" -F '#{pane_left} #{pane_id}' | sort -n | head -1 | awk '{print $2}')
 
-    tmux join-pane -hb -l "$SIDEBAR_WIDTH" -s "$pane_id" -t "$leftmost_pane"
-
-    sleep 0.05
-
-    redistribute_panes "$current_window" "$pane_id"
-    tmux select-pane -t "$active_pane"
+    tmux join-pane -bdfh -l "$SIDEBAR_WIDTH" -s "$pane_id" -t "$leftmost_pane" 2>/dev/null || return 1
+    tmux resize-pane -t "$pane_id" -x "$SIDEBAR_WIDTH" 2>/dev/null || true
 }
 
 spawn_sidebar() {
     local current_path
     current_path=$(tmux display-message -p '#{pane_current_path}')
-    local active_pane
-    active_pane=$(tmux display-message -p '#{pane_id}')
-
-    local leftmost_pane
-    leftmost_pane=$(tmux list-panes -F '#{pane_left} #{pane_id}' | sort -n | head -1 | awk '{print $2}')
-
-    local sidebar_pane
-    sidebar_pane=$(tmux split-window -hb -l "$SIDEBAR_WIDTH" -c "$current_path" -t "$leftmost_pane" -P -F '#{pane_id}' "valkyrie")
-
     local current_window
     current_window=$(get_current_window)
 
-    sleep 0.05
+    local leftmost_pane
+    leftmost_pane=$(tmux list-panes -t "$current_window" -F '#{pane_left} #{pane_id}' | sort -n | head -1 | awk '{print $2}')
 
-    redistribute_panes "$current_window" "$sidebar_pane"
-    tmux select-pane -t "$active_pane"
+    tmux split-window -bdfh -l "$SIDEBAR_WIDTH" -c "$current_path" -t "$leftmost_pane" "valkyrie" >/dev/null 2>&1 || return 1
 }
 
 main() {
