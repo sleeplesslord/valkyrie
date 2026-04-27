@@ -343,6 +343,8 @@ export default async function AgentSidebarPlugin(ctx) {
 
     "tool.execute.after": async (input, output) => {
       if (input.tool === "bash" && input.args?.command) {
+        const found = extractSagaIds(input.args.command);
+        if (found) sagaRefreshNeeded = true;
         SAGA_NEW_PATTERN.lastIndex = 0;
         if (SAGA_NEW_PATTERN.test(input.args.command)) {
           if (output.output) {
