@@ -115,8 +115,8 @@ fn render_agent_list(f: &mut Frame, app: &App, area: Rect) {
 
             let (indicator_style, name_style) = if is_selected {
                 (
-                    Style::default().fg(Color::Black).bg(status_color),
-                    Style::default().fg(Color::Black).bg(name_color).bold(),
+                    Style::default().fg(status_color).bold(),
+                    Style::default().fg(name_color).bold(),
                 )
             } else {
                 (
@@ -144,11 +144,7 @@ fn render_agent_list(f: &mut Frame, app: &App, area: Rect) {
 
             if has_task || has_diff || has_file {
                 let indent = if worktree.is_some() { "    " } else { "  " };
-                let sub_bg = if is_selected { Some(Color::DarkGray) } else { None };
-                let sub_style = |fg: Color| match sub_bg {
-                    Some(bg) => Style::default().fg(fg).bg(bg),
-                    None => Style::default().fg(fg),
-                };
+                let sub_style = |fg: Color| Style::default().fg(fg);
 
                 // --- Task + diff line ---
                 if has_task || has_diff {
@@ -231,11 +227,7 @@ fn render_agent_list(f: &mut Frame, app: &App, area: Rect) {
                 let used = saga_indent.len() + saga_status_str.len() + 1;
                 let saga_title_max = width.saturating_sub(used);
                 let saga_title = truncate_str(&saga.title, saga_title_max);
-                let saga_bg = if is_selected { Some(Color::DarkGray) } else { None };
-                let saga_style = |fg: Color| match saga_bg {
-                    Some(bg) => Style::default().fg(fg).bg(bg),
-                    None => Style::default().fg(fg),
-                };
+                let saga_style = |fg: Color| Style::default().fg(fg);
                 let saga_line = Line::from(vec![
                     Span::styled(saga_indent.to_string(), saga_style(Color::DarkGray)),
                     Span::styled(
@@ -419,15 +411,15 @@ fn render_diff_view(f: &mut Frame, app: &App) {
                     .fg(Color::Yellow)
                     .add_modifier(Modifier::BOLD)
             } else if line.starts_with("---") {
-                Style::default().fg(Color::Magenta).bg(Color::DarkGray)
+                Style::default().fg(Color::Magenta)
             } else if line.starts_with("+++") {
-                Style::default().fg(Color::Magenta).bg(Color::DarkGray)
+                Style::default().fg(Color::Magenta)
             } else if line.starts_with("@@") {
                 Style::default().fg(Color::Cyan)
             } else if line.starts_with('+') {
-                Style::default().fg(Color::Green).bg(Color::Rgb(0, 40, 0))
+                Style::default().fg(Color::Green)
             } else if line.starts_with('-') {
-                Style::default().fg(Color::Red).bg(Color::Rgb(40, 0, 0))
+                Style::default().fg(Color::Red)
             } else {
                 Style::default().fg(Color::White)
             };
