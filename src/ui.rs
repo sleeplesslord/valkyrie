@@ -213,7 +213,7 @@ fn render_agent_list(f: &mut Frame, app: &App, area: Rect) {
 
             agent_index += 1;
 
-            for saga in agent.sagas.iter().take(3) {
+            for saga in agent.sagas.iter().take(5) {
                 let saga_indent = if worktree.is_some() { "      " } else { "    " };
                 let (saga_status_str, saga_status_color) = match saga.status.as_str() {
                     "active" if saga.claimed_by.as_deref().map_or(false, |c| !c.is_empty()) => ("◐", Color::Yellow),

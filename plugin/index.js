@@ -205,7 +205,7 @@ export default async function AgentSidebarPlugin(ctx) {
     try {
       await mkdir(SIGNAL_DIR, { recursive: true });
       await refreshSagas();
-      const sagas = [...trackedSagas.values()].slice(0, 10);
+      const sagas = [...trackedSagas.values()].reverse().slice(0, 10);
       await writeFile(signalPath, JSON.stringify({
         version: 1,
         agent_type: "opencode",
