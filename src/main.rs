@@ -381,6 +381,11 @@ async fn run_app(
                     crossterm::event::KeyCode::Char('D') => {
                         app.open_diff_in_window();
                     }
+                    crossterm::event::KeyCode::Char('w') => {
+                        if let Err(e) = app.jump_to_worktree() {
+                            eprintln!("Failed to jump to worktree: {}", e);
+                        }
+                    }
                     crossterm::event::KeyCode::Enter => {
                         if let Err(e) = app.jump_to_selected() {
                             eprintln!("Failed to jump to pane: {}", e);

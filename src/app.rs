@@ -330,6 +330,14 @@ impl App {
         Ok(())
     }
 
+    pub fn jump_to_worktree(&self) -> Result<()> {
+        if let Some(agent) = self.selected_agent() {
+            let cwd = agent.worktree.as_deref().unwrap_or(&agent.working_dir);
+            self.tmux.new_window_cwd("worktree", cwd)?;
+        }
+        Ok(())
+    }
+
     pub fn start_rename(&mut self) {
         if let Some(agent) = self.selected_agent() {
             let agent_id = agent.pane_id.clone();
