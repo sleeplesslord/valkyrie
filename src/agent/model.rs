@@ -28,24 +28,39 @@ pub enum AgentStatus {
     Unknown,
 }
 
-const SPINNER_FRAMES: &[&str] = &["░", "▒", "▓", "█", "▓", "▒"];
+const WAVE_BLOCKS: &[&str] = &["░", "▒", "▓", "█"];
+
+/// 3-char wave pulser: each column peaks at a different tick offset.
+/// Produces patterns like ░░▓ ░▓▒ ▓▒░ █▓▓ ▓█▒ … creating a rolling wave.
+fn wave_frame(tick: u64) -> String {
+    let t = tick as usize;
+    let n = WAVE_BLOCKS.len();
+    let mut out = String::with_capacity(6);
+    for col in 0..3 {
+        // Each column is offset by 1 tick, stepped every 2 ticks for a smooth wave
+        let phase = (t / 2 + col) % (n * 2);
+        let idx = if phase < n { phase } else { n * 2 - 1 - phase };
+        out.push_str(WAVE_BLOCKS[idx.min(n - 1)]);
+    }
+    out
+}
 
 impl AgentStatus {
     pub fn indicator(&self, activity: Option<&str>, tool: Option<&str>, tick_count: u64) -> String {
-        let frame = SPINNER_FRAMES[(tick_count as usize) % SPINNER_FRAMES.len()];
+        let wave = wave_frame(tick_count);
         match self {
             AgentStatus::Running => match (activity, tool) {
-                (Some("coding"), Some(t)) => format!("{}✎{}", frame, truncate_tool(t)),
-                (Some("exploring"), Some(t)) => format!("{}◉{}", frame, truncate_tool(t)),
-                (Some("running"), Some(t)) => format!("{}⟳{}", frame, truncate_tool(t)),
-                (Some("researching"), Some(_)) => format!("{}◈web", frame),
-                (_, Some(t)) => format!("{}◉{}", frame, truncate_tool(t)),
-                (Some("coding"), None) => format!("{}✎", frame),
-                (Some("exploring"), None) => format!("{}◉", frame),
-                (Some("running"), None) => format!("{}⟳", frame),
-                (Some("researching"), None) => format!("{}◈", frame),
-                (Some("thinking"), None) => format!("{}◎", frame),
-                _ => frame.to_string(),
+                (Some("coding"), Some(t)) => format!("{} ✎{}", wave, truncate_tool(t)),
+                (Some("exploring"), Some(t)) => format!("{} ◉{}", wave, truncate_tool(t)),
+                (Some("running"), Some(t)) => format!("{} ⟳{}", wave, truncate_tool(t)),
+                (Some("researching"), Some(_)) => format!("{} ◈web", wave),
+                (_, Some(t)) => format!("{} ◉{}", wave, truncate_tool(t)),
+                (Some("coding"), None) => format!("{} ✎", wave),
+                (Some("exploring"), None) => format!("{} ◉", wave),
+                (Some("running"), None) => format!("{} ⟳", wave),
+                (Some("researching"), None) => format!("{} ◈", wave),
+                (Some("thinking"), None) => format!("{} ◎", wave),
+                _ => wave,
             },
             AgentStatus::Idle => "○".to_string(),
             AgentStatus::WaitingInput => "◐".to_string(),
