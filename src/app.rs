@@ -219,15 +219,23 @@ impl App {
                 }
             }
 
-            if let Some(worktree_path) = self.signal_watcher.get_worktree(&agent.pane_id) {
-                agent.working_dir = worktree_path.clone();
+            // Prefer signal's worktree field, fall back to working_dir from signal,
+            // to override tmux's pane_current_path (which may be $HOME if the
+            // agent was launched from there).
+            let signal_dir = self
+                .signal_watcher
+                .get_worktree(&agent.pane_id)
+                .or_else(|| self.signal_watcher.get_working_dir(&agent.pane_id));
+
+            if let Some(dir) = &signal_dir {
+                agent.working_dir = dir.clone();
                 if let Some(root) = self.worktree_cache.root() {
-                    let wt_path = std::path::PathBuf::from(&worktree_path);
+                    let wt_path = std::path::PathBuf::from(dir);
                     if let Ok(relative) = wt_path.strip_prefix(root) {
                         let rel = relative.to_string_lossy().to_string();
                         agent.worktree = if rel.is_empty() { None } else { Some(rel) };
                     } else {
-                        agent.worktree = Some(worktree_path);
+                        agent.worktree = Some(dir.clone());
                     }
                 }
             }
@@ -333,8 +341,18 @@ impl App {
 
     pub fn jump_to_worktree(&self) -> Result<()> {
         if let Some(agent) = self.selected_agent() {
-            let cwd = agent.worktree.as_deref().unwrap_or(&agent.working_dir);
-            self.tmux.new_window_cwd("worktree", cwd)?;
+            let cwd = if let Some(wt_rel) = &agent.worktree {
+                // worktree may be a relative path (stripped from worktree_root)
+                if let Some(root) = self.worktree_cache.root() {
+                    root.join(wt_rel).to_string_lossy().to_string()
+                } else {
+                    // Absolute path or no root — use as-is
+                    wt_rel.clone()
+                }
+            } else {
+                agent.working_dir.clone()
+            };
+            self.tmux.new_window_cwd("worktree", &cwd)?;
         }
         Ok(())
     }
