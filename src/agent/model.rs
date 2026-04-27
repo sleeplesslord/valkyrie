@@ -28,22 +28,27 @@ pub enum AgentStatus {
     Unknown,
 }
 
+const SPINNER_FRAMES: &[&str] = &["⠋", "⠙", "⠹", "⠸", "⠴", "⠦", "⠧", "⠇", "⠏", "⠋"];
+
 impl AgentStatus {
-    pub fn indicator(&self, activity: Option<&str>, tool: Option<&str>) -> String {
+    pub fn indicator(&self, activity: Option<&str>, tool: Option<&str>, tick_count: u64) -> String {
+        let frame = SPINNER_FRAMES[(tick_count as usize) % SPINNER_FRAMES.len()];
         match self {
-            AgentStatus::Running => match (activity, tool) {
-                (Some("coding"), Some(t)) => format!("✎{}", truncate_tool(t)),
-                (Some("exploring"), Some(t)) => format!("◉{}", truncate_tool(t)),
-                (Some("running"), Some(t)) => format!("▶{}", truncate_tool(t)),
-                (Some("researching"), Some(_)) => "◈web".to_string(),
-                (_, Some(t)) => format!("◉{}", truncate_tool(t)),
-                (Some("coding"), None) => "✎".to_string(),
-                (Some("exploring"), None) => "◉".to_string(),
-                (Some("running"), None) => "▶".to_string(),
-                (Some("researching"), None) => "◈".to_string(),
-                (Some("thinking"), None) => "◎".to_string(),
-                _ => "●".to_string(),
-            },
+            AgentStatus::Running => {
+                match (activity, tool) {
+                    (Some("coding"), Some(t)) => format!("{}✎{}", frame, truncate_tool(t)),
+                    (Some("exploring"), Some(t)) => format!("{}◉{}", frame, truncate_tool(t)),
+                    (Some("running"), Some(t)) => format!("{}▶{}", frame, truncate_tool(t)),
+                    (Some("researching"), Some(_)) => format!("{}◈web", frame),
+                    (_, Some(t)) => format!("{}◉{}", frame, truncate_tool(t)),
+                    (Some("coding"), None) => format!("{}✎", frame),
+                    (Some("exploring"), None) => format!("{}◉", frame),
+                    (Some("running"), None) => format!("{}▶", frame),
+                    (Some("researching"), None) => format!("{}◈", frame),
+                    (Some("thinking"), None) => format!("{}◎", frame),
+                    _ => frame.to_string(),
+                }
+            }
             AgentStatus::Idle => "○".to_string(),
             AgentStatus::WaitingInput => "◐".to_string(),
             AgentStatus::Error => "⚠".to_string(),

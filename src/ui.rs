@@ -74,8 +74,18 @@ fn render_agent_list(f: &mut Frame, app: &App, area: Rect) {
         }
 
         for agent in agents {
+            // Per-activity color for Running; distinct colors per status otherwise
             let status_color = match agent.status {
-                crate::agent::AgentStatus::Running => Color::Green,
+                crate::agent::AgentStatus::Running => {
+                    match agent.activity.as_deref() {
+                        Some("coding") => Color::Green,
+                        Some("exploring") => Color::Cyan,
+                        Some("running") => Color::Yellow,
+                        Some("researching") => Color::Magenta,
+                        Some("thinking") => Color::White,
+                        _ => Color::Green,
+                    }
+                }
                 crate::agent::AgentStatus::Idle => Color::Gray,
                 crate::agent::AgentStatus::WaitingInput => Color::Yellow,
                 crate::agent::AgentStatus::Error => Color::Red,
@@ -90,9 +100,11 @@ fn render_agent_list(f: &mut Frame, app: &App, area: Rect) {
                 crate::agent::AgentType::ClaudeCode => Color::Magenta,
             };
 
-            let status_indicator = agent
-                .status
-                .indicator(agent.activity.as_deref(), agent.tool_executing.as_deref());
+            let status_indicator = agent.status.indicator(
+                agent.activity.as_deref(),
+                agent.tool_executing.as_deref(),
+                app.tick_count,
+            );
 
             let prefix = if worktree.is_some() { "  " } else { "" };
 
