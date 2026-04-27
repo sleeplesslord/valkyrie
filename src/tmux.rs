@@ -49,7 +49,10 @@ impl Tmux {
             .output()?;
 
         if !output.status.success() {
-            anyhow::bail!("tmux list-panes failed: {}", String::from_utf8_lossy(&output.stderr));
+            anyhow::bail!(
+                "tmux list-panes failed: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
         }
 
         let stdout = String::from_utf8_lossy(&output.stdout);
@@ -148,7 +151,11 @@ impl Tmux {
         Command::new("tmux")
             .args(["list-panes", "-a", "-F", "#{pane_id}"])
             .output()
-            .map(|o| String::from_utf8_lossy(&o.stdout).lines().any(|l| l == pane_id))
+            .map(|o| {
+                String::from_utf8_lossy(&o.stdout)
+                    .lines()
+                    .any(|l| l == pane_id)
+            })
             .unwrap_or(false)
     }
 
@@ -174,7 +181,11 @@ impl Tmux {
             .status()?;
 
         if !status.success() {
-            anyhow::bail!("Failed to break pane {} to window {}", pane_id, target_window);
+            anyhow::bail!(
+                "Failed to break pane {} to window {}",
+                pane_id,
+                target_window
+            );
         }
         Ok(())
     }
@@ -184,14 +195,21 @@ impl Tmux {
             .args([
                 "join-pane",
                 "-hb",
-                "-l", &width.to_string(),
-                "-s", pane_id,
-                "-t", target_window,
+                "-l",
+                &width.to_string(),
+                "-s",
+                pane_id,
+                "-t",
+                target_window,
             ])
             .status()?;
 
         if !status.success() {
-            anyhow::bail!("Failed to join pane {} to window {}", pane_id, target_window);
+            anyhow::bail!(
+                "Failed to join pane {} to window {}",
+                pane_id,
+                target_window
+            );
         }
         Ok(())
     }
@@ -210,7 +228,16 @@ impl Tmux {
 
     pub fn run_in_window(&self, name: &str, command: &str) -> Result<String> {
         let output = Command::new("tmux")
-            .args(["new-window", "-P", "-F", "#{window_id}", "-n", name, "--", command])
+            .args([
+                "new-window",
+                "-P",
+                "-F",
+                "#{window_id}",
+                "-n",
+                name,
+                "--",
+                command,
+            ])
             .output()?;
 
         if !output.status.success() {
@@ -247,7 +274,7 @@ mod tests {
         let tmux = Tmux::new();
         let line = "main:@0:%0|zsh|zsh|/home/user/project|1";
         let pane = tmux.parse_pane_line(line).unwrap();
-        
+
         assert_eq!(pane.session_name, "main");
         assert_eq!(pane.window_id, "@0");
         assert_eq!(pane.pane_id, "%0");
@@ -262,7 +289,7 @@ mod tests {
         let tmux = Tmux::new();
         let line = "main:@1:%1|valkyrie|valkyrie|/home/user/project|0";
         let pane = tmux.parse_pane_line(line).unwrap();
-        
+
         assert!(!pane.is_active);
     }
 }

@@ -1,4 +1,5 @@
 use crate::app::{App, Mode};
+use ratatui::style::Stylize;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
@@ -6,7 +7,6 @@ use ratatui::{
     widgets::{Block, Borders, List, ListItem, Paragraph},
     Frame,
 };
-use ratatui::style::Stylize;
 
 pub fn render(f: &mut Frame, app: &App) {
     let chunks = Layout::default()
@@ -45,15 +45,14 @@ fn render_header(f: &mut Frame, app: &App, area: Rect) {
         Mode::DiffView { .. } => " diff view ",
     };
 
-    let header = Paragraph::new(title)
-        .style(Style::default().fg(Color::Cyan).bold());
+    let header = Paragraph::new(title).style(Style::default().fg(Color::Cyan).bold());
     f.render_widget(header, area);
 }
 
 fn render_agent_list(f: &mut Frame, app: &App, area: Rect) {
     if app.agents.is_empty() {
-        let empty_msg = Paragraph::new("No agents detected")
-            .style(Style::default().fg(Color::DarkGray));
+        let empty_msg =
+            Paragraph::new("No agents detected").style(Style::default().fg(Color::DarkGray));
         f.render_widget(empty_msg, area);
         return;
     }
@@ -91,10 +90,9 @@ fn render_agent_list(f: &mut Frame, app: &App, area: Rect) {
                 crate::agent::AgentType::ClaudeCode => Color::Magenta,
             };
 
-            let status_indicator = agent.status.indicator(
-                agent.activity.as_deref(),
-                agent.tool_executing.as_deref(),
-            );
+            let status_indicator = agent
+                .status
+                .indicator(agent.activity.as_deref(), agent.tool_executing.as_deref());
 
             let prefix = if worktree.is_some() { "  " } else { "" };
 
@@ -109,12 +107,19 @@ fn render_agent_list(f: &mut Frame, app: &App, area: Rect) {
             };
 
             let line1 = Line::from(vec![
-                Span::styled(format!("{}{} ", prefix, status_indicator), Style::default().fg(status_color)),
+                Span::styled(
+                    format!("{}{} ", prefix, status_indicator),
+                    Style::default().fg(status_color),
+                ),
                 Span::styled(name, name_style),
             ]);
             items.push(ListItem::new(line1));
 
-            let has_task = agent.task_description.as_deref().map(|t| !t.is_empty()).unwrap_or(false);
+            let has_task = agent
+                .task_description
+                .as_deref()
+                .map(|t| !t.is_empty())
+                .unwrap_or(false);
             let diff = agent.diff_stats.as_ref().map(|d| d.to_string());
             let has_diff = diff.as_deref().map(|d| !d.is_empty()).unwrap_or(false);
 
@@ -135,10 +140,8 @@ fn render_agent_list(f: &mut Frame, app: &App, area: Rect) {
                         0
                     };
                     let task_max = width.saturating_sub(indent.len() + diff_display_len + 1);
-                    let task = truncate_str(
-                        agent.task_description.as_deref().unwrap_or(""),
-                        task_max,
-                    );
+                    let task =
+                        truncate_str(agent.task_description.as_deref().unwrap_or(""), task_max);
                     spans.push(Span::styled(task, Style::default().fg(Color::Gray)));
                     if diff_display_len > 0 {
                         spans.push(Span::styled(" ".to_string(), Style::default()));
@@ -160,10 +163,8 @@ fn render_agent_list(f: &mut Frame, app: &App, area: Rect) {
                     }
                 } else if has_task {
                     let task_max = width.saturating_sub(indent.len());
-                    let task = truncate_str(
-                        agent.task_description.as_deref().unwrap_or(""),
-                        task_max,
-                    );
+                    let task =
+                        truncate_str(agent.task_description.as_deref().unwrap_or(""), task_max);
                     spans.push(Span::styled(task, Style::default().fg(Color::Gray)));
                 } else if has_diff {
                     let diff_str = diff.as_deref().unwrap_or("");
@@ -208,7 +209,10 @@ fn render_agent_list(f: &mut Frame, app: &App, area: Rect) {
                 let saga_title = truncate_str(&saga.title, saga_title_max);
                 let saga_line = Line::from(vec![
                     Span::styled(saga_indent.to_string(), Style::default()),
-                    Span::styled(saga_status_str.to_string(), Style::default().fg(saga_status_color)),
+                    Span::styled(
+                        saga_status_str.to_string(),
+                        Style::default().fg(saga_status_color),
+                    ),
                     Span::styled(" ".to_string(), Style::default()),
                     Span::styled(saga_title, Style::default().fg(saga_title_color)),
                 ]);
@@ -223,8 +227,7 @@ fn render_agent_list(f: &mut Frame, app: &App, area: Rect) {
         items.pop();
     }
 
-    let list = List::new(items)
-        .block(Block::default().borders(Borders::NONE));
+    let list = List::new(items).block(Block::default().borders(Borders::NONE));
 
     f.render_widget(list, area);
 }
@@ -257,14 +260,15 @@ fn parse_diff_stats(diff: &str) -> (String, String) {
 
 fn render_footer(f: &mut Frame, app: &App, area: Rect) {
     let help_text = match app.mode {
-        Mode::Normal => " j/k:nav | Enter:jump | r:rename | d:diff | D:diff window | ?:help | q:quit ",
+        Mode::Normal => {
+            " j/k:nav | Enter:jump | r:rename | d:diff | D:diff window | ?:help | q:quit "
+        }
         Mode::Rename { .. } => " Enter:save | Esc:cancel ",
         Mode::Help => " any key to close ",
         Mode::DiffView { .. } => " Esc:back ",
     };
 
-    let footer = Paragraph::new(help_text)
-        .style(Style::default().fg(Color::DarkGray));
+    let footer = Paragraph::new(help_text).style(Style::default().fg(Color::DarkGray));
     f.render_widget(footer, area);
 }
 
@@ -283,13 +287,12 @@ fn render_help_overlay(f: &mut Frame) {
         Line::from(" q/Esc   Quit"),
     ];
 
-    let help = Paragraph::new(help_text)
-        .block(
-            Block::default()
-                .title(" Help ")
-                .borders(Borders::ALL)
-                .border_style(Style::default().fg(Color::Cyan)),
-        );
+    let help = Paragraph::new(help_text).block(
+        Block::default()
+            .title(" Help ")
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(Color::Cyan)),
+    );
 
     f.render_widget(help, area);
 }
@@ -323,7 +326,9 @@ fn render_diff_view(f: &mut Frame, app: &App) {
         .take(max_lines)
         .map(|line| {
             let style = if line.starts_with("diff --git") {
-                Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD)
             } else if line.starts_with("---") || line.starts_with("+++") {
                 Style::default().fg(Color::Magenta)
             } else if line.starts_with("@@") {
@@ -339,14 +344,17 @@ fn render_diff_view(f: &mut Frame, app: &App) {
         })
         .collect();
 
-    let title = format!(" Git Diff (Esc to close) {}/{} ", scroll + max_lines.min(total_lines - scroll), total_lines);
-    let diff = Paragraph::new(diff_text)
-        .block(
-            Block::default()
-                .title(title)
-                .borders(Borders::ALL)
-                .border_style(Style::default().fg(Color::Cyan)),
-        );
+    let title = format!(
+        " Git Diff (Esc to close) {}/{} ",
+        scroll + max_lines.min(total_lines - scroll),
+        total_lines
+    );
+    let diff = Paragraph::new(diff_text).block(
+        Block::default()
+            .title(title)
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(Color::Cyan)),
+    );
 
     f.render_widget(diff, area);
 }

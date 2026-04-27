@@ -1,6 +1,6 @@
-use crate::agent::model::{AgentType};
-use crate::tmux::PaneInfo;
+use crate::agent::model::AgentType;
 use crate::agent::registry::AgentDetector;
+use crate::tmux::PaneInfo;
 
 pub struct ClaudeDetector;
 

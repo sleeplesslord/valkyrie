@@ -26,7 +26,7 @@ pub struct Config {
 impl Config {
     pub fn load() -> Result<Self> {
         let path = Self::config_path();
-        
+
         if !path.exists() {
             return Ok(Self::default());
         }
@@ -38,7 +38,7 @@ impl Config {
 
     pub fn save(&self) -> Result<()> {
         let path = Self::config_path();
-        
+
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent)?;
         }
@@ -62,7 +62,7 @@ impl Config {
 impl AppState {
     pub fn load() -> Result<Self> {
         let path = Self::state_path();
-        
+
         if !path.exists() {
             return Ok(Self::default());
         }
@@ -74,7 +74,7 @@ impl AppState {
 
     pub fn save(&self) -> Result<()> {
         let path = Self::state_path();
-        
+
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent)?;
         }

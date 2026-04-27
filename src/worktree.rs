@@ -40,7 +40,7 @@ impl WorktreeCache {
 
     pub fn find_worktree(&self, working_dir: &str) -> Option<&WorktreeInfo> {
         let path = PathBuf::from(working_dir);
-        
+
         for (wt_path, info) in &self.worktrees {
             if path.starts_with(wt_path) {
                 return Some(info);
@@ -88,10 +88,11 @@ fn parse_worktree_list(output: &str, root: &Path) -> Vec<WorktreeInfo> {
             }
             let path = line.strip_prefix("worktree ").unwrap_or("");
             let path = PathBuf::from(path);
-            let relative = path.strip_prefix(root)
+            let relative = path
+                .strip_prefix(root)
                 .map(|p| p.to_string_lossy().to_string())
                 .unwrap_or_else(|_| path.display().to_string());
-            
+
             current = Some(WorktreeInfo {
                 path,
                 relative,
@@ -118,19 +119,20 @@ fn parse_worktree_list(output: &str, root: &Path) -> Vec<WorktreeInfo> {
 
 pub fn detect_worktree(working_dir: &str, root: &Path) -> Option<WorktreeInfo> {
     let path = PathBuf::from(working_dir);
-    
+
     if !path.join(".git").exists() {
         return None;
     }
-    
+
     let git_file = path.join(".git");
     if git_file.is_file() {
         if let Ok(content) = std::fs::read_to_string(&git_file) {
             if content.starts_with("gitdir:") {
-                let relative = path.strip_prefix(root)
+                let relative = path
+                    .strip_prefix(root)
                     .map(|p| p.to_string_lossy().to_string())
                     .unwrap_or_else(|_| path.display().to_string());
-                
+
                 return Some(WorktreeInfo {
                     path,
                     relative,
@@ -140,7 +142,7 @@ pub fn detect_worktree(working_dir: &str, root: &Path) -> Option<WorktreeInfo> {
             }
         }
     }
-    
+
     None
 }
 
@@ -160,7 +162,7 @@ branch feature-auth
 ";
         let root = PathBuf::from("/home/user/project");
         let worktrees = parse_worktree_list(output, &root);
-        
+
         assert_eq!(worktrees.len(), 2);
         assert_eq!(worktrees[0].relative, "");
         assert_eq!(worktrees[1].relative, ".worktrees/feature-auth");

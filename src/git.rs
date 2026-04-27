@@ -20,7 +20,7 @@ impl std::fmt::Display for DiffStats {
 
 pub fn get_diff_stats(working_dir: &str) -> Option<DiffStats> {
     let path = Path::new(working_dir);
-    
+
     if !path.join(".git").exists() {
         return None;
     }
@@ -55,7 +55,7 @@ fn parse_shortstat(s: &str) -> Option<DiffStats> {
     }
 
     let mut stats = DiffStats::default();
-    
+
     let parts: Vec<&str> = s.split(',').collect();
     for part in parts {
         let part = part.trim();
@@ -77,7 +77,7 @@ pub fn is_git_repo(working_dir: &str) -> bool {
 
 pub fn get_diff(working_dir: &str) -> Option<String> {
     let path = Path::new(working_dir);
-    
+
     let git_path = path.join(".git");
     if !git_path.exists() {
         return None;
