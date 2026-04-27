@@ -17,6 +17,7 @@ pub struct SagaInfo {
     pub id: String,
     pub title: String,
     pub status: String,
+    pub claimed_by: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]

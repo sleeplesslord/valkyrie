@@ -17,9 +17,24 @@ const TOOL_ACTIVITY = {
   webfetch: "researching",
 };
 
-const SAGA_ID_PATTERN = /\bsg\s+(?:claim|done|log|context|edit|label|priority|depend|relate|unclaim)\s+([\w.]+)/g;
+// Matches sg subcommands that take a saga ID as the first arg.
+// For multi-ID commands like "sg claim abc123 def456", the global +while
+// loop will match the first ID, then extractSgIdsFromTail picks up the rest.
+const SAGA_ID_PATTERN = /\bsg\s+(?:claim|done|log|context|edit|label|priority|depend|relate|unclaim|continue|reopen|wontdo)\s+([\w.-]+)/g;
 const SAGA_NEW_PATTERN = /\bsg\s+new\b/g;
-const SAGA_CLAIM_PATTERN = /\bsg\s+claim\s+([\w.]+)/g;
+
+/// After the first regex match consumes "sg <cmd> <id>", any remaining IDs
+/// on the same line are bare tokens. This extracts them until a flag (--xx) or
+/// end of string.
+function extractSgIdsFromTail(text, firstMatchEnd) {
+  const tail = text.slice(firstMatchEnd);
+  const ids = [];
+  for (const m of tail.matchAll(/\s+([\w.-]+)/g)) {
+    if (m[1].startsWith("-")) break; // flag, stop
+    ids.push(m[1]);
+  }
+  return ids;
+}
 
 async function findWorktree(filePath) {
   try {
@@ -62,6 +77,7 @@ async function fetchSagaInfo(sagaIds) {
           id: data.saga.id,
           title: data.saga.title || "",
           status: data.saga.status || "unknown",
+          claimed_by: data.saga.claimed_by || null,
         });
       }
     } catch {}
@@ -85,6 +101,7 @@ export default async function AgentSidebarPlugin(ctx) {
   let currentTask = null;
   let currentLabel = null;
   let currentSessionId = null;
+  let lastBashCommand = null; // carried from before → after hook
   const trackedSagas = new Map();
   let sagaRefreshNeeded = false;
   let lastSagaRefresh = 0;
@@ -162,13 +179,13 @@ export default async function AgentSidebarPlugin(ctx) {
     let m;
     SAGA_ID_PATTERN.lastIndex = 0;
     while ((m = SAGA_ID_PATTERN.exec(text)) !== null) {
-      trackedSagas.set(m[1], { id: m[1], title: "", status: "unknown" });
+      trackedSagas.set(m[1], { id: m[1], title: "", status: "unknown", claimed_by: null });
       found = true;
-    }
-    SAGA_CLAIM_PATTERN.lastIndex = 0;
-    while ((m = SAGA_CLAIM_PATTERN.exec(text)) !== null) {
-      trackedSagas.set(m[1], { id: m[1], title: "", status: "unknown" });
-      found = true;
+      // Multi-ID commands (e.g. "sg claim abc def"): pick up trailing IDs
+      const tailIds = extractSgIdsFromTail(text, m.index + m[0].length);
+      for (const id of tailIds) {
+        trackedSagas.set(id, { id, title: "", status: "unknown", claimed_by: null });
+      }
     }
     return found;
   }
@@ -177,7 +194,7 @@ export default async function AgentSidebarPlugin(ctx) {
     const idPattern = /(?:created|saga|Saga)\s+(?:saga\s+)?([a-z0-9]{5,}(?:\.\d+)?)/i;
     const m = text.match(idPattern);
     if (m) {
-      trackedSagas.set(m[1], { id: m[1], title: "", status: "unknown" });
+      trackedSagas.set(m[1], { id: m[1], title: "", status: "unknown", claimed_by: null });
       return true;
     }
     return false;
@@ -329,6 +346,7 @@ export default async function AgentSidebarPlugin(ctx) {
       currentTool = input.tool;
       currentActivity = TOOL_ACTIVITY[input.tool] || "thinking";
       if (input.tool === "bash" && output.args?.command) {
+        lastBashCommand = output.args.command;
         const found = extractSagaIds(output.args.command);
         if (found) sagaRefreshNeeded = true;
       }
@@ -342,11 +360,15 @@ export default async function AgentSidebarPlugin(ctx) {
     },
 
     "tool.execute.after": async (input, output) => {
-      if (input.tool === "bash" && input.args?.command) {
-        const found = extractSagaIds(input.args.command);
+      // input is {tool, sessionID, callID} — no args in after hook.
+      // Use the command saved from the before hook.
+      const cmd = input.tool === "bash" ? lastBashCommand : null;
+      lastBashCommand = null;
+      if (cmd) {
+        const found = extractSagaIds(cmd);
         if (found) sagaRefreshNeeded = true;
         SAGA_NEW_PATTERN.lastIndex = 0;
-        if (SAGA_NEW_PATTERN.test(input.args.command)) {
+        if (SAGA_NEW_PATTERN.test(cmd)) {
           if (output.output) {
             extractSagaIdFromOutput(output.output);
           }

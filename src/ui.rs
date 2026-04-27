@@ -214,12 +214,14 @@ fn render_agent_list(f: &mut Frame, app: &App, area: Rect) {
             for saga in agent.sagas.iter().take(3) {
                 let saga_indent = if worktree.is_some() { "      " } else { "    " };
                 let (saga_status_str, saga_status_color) = match saga.status.as_str() {
+                    "active" if saga.claimed_by.as_deref().map_or(false, |c| !c.is_empty()) => ("◐", Color::Yellow),
                     "active" => ("●", Color::Green),
-                    "claimed" => ("◐", Color::Yellow),
+                    "paused" => ("◷", Color::Yellow),
                     "done" => ("✓", Color::DarkGray),
+                    "wontdo" => ("⊘", Color::DarkGray),
                     _ => ("?", Color::DarkGray),
                 };
-                let saga_title_color = if saga.status.as_str() == "done" {
+                let saga_title_color = if saga.status.as_str() == "done" || saga.status.as_str() == "wontdo" {
                     Color::DarkGray
                 } else {
                     Color::Gray
