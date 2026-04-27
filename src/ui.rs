@@ -66,9 +66,9 @@ fn render_agent_list(f: &mut Frame, app: &App, area: Rect) {
         if let Some(ref wt_name) = worktree {
             let header_style = Style::default().fg(Color::Blue).bold();
             let display_name = if wt_name.is_empty() {
-                "📁 (root)".to_string()
+                "◆ (root)".to_string()
             } else {
-                format!("📁 {}", wt_name)
+                format!("◆ {}", wt_name)
             };
             items.push(ListItem::new(Line::styled(display_name, header_style)));
         }
