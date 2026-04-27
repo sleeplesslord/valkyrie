@@ -10,8 +10,11 @@ const PLUGIN_INDEX_JS: &str = include_str!("../plugin/index.js");
 const PLUGIN_PACKAGE_JSON: &str = include_str!("../plugin/package.json");
 
 fn opencode_config_dir() -> PathBuf {
-    dirs::config_dir()
-        .expect("Could not find config directory")
+    // Always use $HOME/.config/opencode — dirs::config_dir() resolves to
+    // ~/Library/Application Support on macOS which opencode doesn't use.
+    dirs::home_dir()
+        .expect("Could not find home directory")
+        .join(".config")
         .join("opencode")
 }
 
