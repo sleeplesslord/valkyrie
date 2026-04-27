@@ -324,6 +324,10 @@ impl App {
 
     pub fn jump_to_selected(&self) -> Result<()> {
         if let Some(agent) = self.selected_agent() {
+            // Switch window first, then focus the pane — select-pane alone
+            // doesn't change the active window in tmux.
+            let window_target = format!("{}:{}", agent.session_name, agent.window_id);
+            self.tmux.select_window(&window_target)?;
             self.tmux
                 .select_pane(&agent.session_name, &agent.window_id, &agent.pane_id)?;
         }
