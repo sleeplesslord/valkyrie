@@ -84,10 +84,58 @@ export default async function AgentSidebarPlugin(ctx) {
   let currentTool = null;
   let currentTask = null;
   let currentLabel = null;
+  let currentSessionId = null;
   const trackedSagas = new Map();
   let sagaRefreshNeeded = false;
   let lastSagaRefresh = 0;
   const SAGA_REFRESH_INTERVAL = 10000;
+
+  function extractSession(event) {
+    const properties = event?.properties;
+    if (properties?.info && typeof properties.info === "object") {
+      return properties.info;
+    }
+    if (properties?.id) {
+      return properties;
+    }
+    return null;
+  }
+
+  function extractSessionId(event) {
+    return (
+      event?.properties?.sessionID ||
+      event?.properties?.info?.id ||
+      event?.properties?.id ||
+      null
+    );
+  }
+
+  function setLabelFromSession(session) {
+    if (!session?.id) return false;
+    if (currentSessionId && session.id !== currentSessionId) return false;
+    currentSessionId = session.id;
+    const nextLabel = typeof session.title === "string" && session.title.trim()
+      ? session.title
+      : null;
+    if (nextLabel === currentLabel) return false;
+    currentLabel = nextLabel;
+    return true;
+  }
+
+  async function refreshSessionLabelById(sessionId) {
+    if (!sessionId) return false;
+    try {
+      const result = await Promise.race([
+        ctx.client.session.get({ path: { id: sessionId } }),
+        new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 5000)),
+      ]);
+      const session = result?.data;
+      if (!session || session.id !== sessionId) return false;
+      return setLabelFromSession(session);
+    } catch {
+      return false;
+    }
+  }
 
   async function refreshSagas() {
     const now = Date.now();
@@ -170,24 +218,6 @@ export default async function AgentSidebarPlugin(ctx) {
   process.on("SIGTERM", cleanup);
   process.on("SIGINT", cleanup);
 
-  async function fetchSessionLabel() {
-    try {
-      const result = await Promise.race([
-        ctx.client.session.list(),
-        new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 5000)),
-      ]);
-      const sessions = result.data;
-      if (sessions && sessions.length > 0) {
-        const latest = sessions[sessions.length - 1];
-        if (latest.title && latest.title !== currentLabel) {
-          currentLabel = latest.title;
-          await writeSignal();
-        }
-      }
-    } catch {}
-  }
-
-  fetchSessionLabel();
   await writeSignal("idle");
 
   const HEARTBEAT_INTERVAL = 15000;
@@ -197,6 +227,13 @@ export default async function AgentSidebarPlugin(ctx) {
     async event({ event }) {
       switch (event.type) {
         case "session.status":
+          if (event.properties?.sessionID && event.properties.sessionID !== currentSessionId) {
+            currentSessionId = event.properties.sessionID;
+            currentLabel = null;
+          }
+          if (event.properties?.sessionID && !currentLabel) {
+            await refreshSessionLabelById(event.properties.sessionID);
+          }
           if (event.properties.status.type === "busy") {
             currentActivity = currentActivity || "thinking";
             await writeSignal("running");
@@ -206,26 +243,51 @@ export default async function AgentSidebarPlugin(ctx) {
           }
           break;
           
+        case "session.created":
         case "session.updated": {
-          const session = event.properties;
-          if (session && session.title && session.title !== currentLabel) {
-            currentLabel = session.title;
+          const session = extractSession(event);
+          if (setLabelFromSession(session)) {
             await writeSignal();
           }
           break;
         }
 
-        case "session.idle":
+        case "session.idle": {
+          const sessionId = extractSessionId(event);
+          if (sessionId && sessionId !== currentSessionId) {
+            currentSessionId = sessionId;
+            currentLabel = null;
+          }
+          if (sessionId && !currentLabel) {
+            await refreshSessionLabelById(sessionId);
+          }
           currentActivity = null;
           currentTool = null;
           await writeSignal("idle");
           break;
-          
-        case "session.error":
+        }
+
+        case "session.error": {
+          const sessionId = extractSessionId(event);
+          if (sessionId && sessionId !== currentSessionId) {
+            currentSessionId = sessionId;
+            currentLabel = null;
+          }
           currentActivity = null;
           currentTool = null;
           await writeSignal("error");
           break;
+        }
+
+        case "session.deleted": {
+          const sessionId = extractSessionId(event);
+          if (sessionId && sessionId === currentSessionId) {
+            currentSessionId = null;
+            currentLabel = null;
+            await writeSignal();
+          }
+          break;
+        }
           
         case "permission.asked":
           currentActivity = "waiting";
