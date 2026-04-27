@@ -1,4 +1,5 @@
 use crate::app::{App, Mode};
+use chrono::Utc;
 use ratatui::style::Stylize;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
@@ -124,9 +125,11 @@ fn render_agent_list(f: &mut Frame, app: &App, area: Rect) {
                 )
             };
 
+            let rel_time = format_relative_time(&agent.last_activity);
             let line1 = Line::from(vec![
                 Span::styled(format!("{}{} ", prefix, status_indicator), indicator_style),
                 Span::styled(name, name_style),
+                Span::styled(format!(" {}", rel_time), Style::default().fg(Color::DarkGray)),
             ]);
             items.push(ListItem::new(line1));
 
@@ -137,76 +140,77 @@ fn render_agent_list(f: &mut Frame, app: &App, area: Rect) {
                 .unwrap_or(false);
             let diff = agent.diff_stats.as_ref().map(|d| d.to_string());
             let has_diff = diff.as_deref().map(|d| !d.is_empty()).unwrap_or(false);
+            let has_file = agent.current_file.as_deref().map(|f| !f.is_empty()).unwrap_or(false);
 
-            if has_task || has_diff {
+            if has_task || has_diff || has_file {
                 let indent = if worktree.is_some() { "    " } else { "  " };
                 let sub_bg = if is_selected { Some(Color::DarkGray) } else { None };
                 let sub_style = |fg: Color| match sub_bg {
                     Some(bg) => Style::default().fg(fg).bg(bg),
                     None => Style::default().fg(fg),
                 };
-                let mut spans: Vec<Span> = vec![Span::styled(indent.to_string(), sub_style(Color::DarkGray))];
 
-                if has_task && has_diff {
-                    let diff_str = diff.as_deref().unwrap_or("");
-                    let (additions, deletions) = parse_diff_stats(diff_str);
-                    let diff_display_len = if !additions.is_empty() && !deletions.is_empty() {
-                        additions.len() + 1 + deletions.len() + 3
-                    } else if !additions.is_empty() {
-                        additions.len() + 1
-                    } else if !deletions.is_empty() {
-                        deletions.len() + 1
+                // --- Task + diff line ---
+                if has_task || has_diff {
+                    let mut spans: Vec<Span> = vec![Span::styled(indent.to_string(), sub_style(Color::DarkGray))];
+
+                    // Compute diff display parts and their width
+                    let files_changed = agent.diff_stats.as_ref().map(|d| d.files_changed).unwrap_or(0);
+                    let (additions, deletions) = if has_diff {
+                        let diff_str = diff.as_deref().unwrap_or("");
+                        parse_diff_stats(diff_str)
                     } else {
-                        0
+                        (String::new(), String::new())
                     };
-                    let task_max = width.saturating_sub(indent.len() + diff_display_len + 1);
-                    let task =
-                        truncate_str(agent.task_description.as_deref().unwrap_or(""), task_max);
-                    spans.push(Span::styled(task, sub_style(Color::Gray)));
-                    if diff_display_len > 0 {
-                        spans.push(Span::styled(" ".to_string(), sub_style(Color::DarkGray)));
+
+                    // Build the diff suffix: ◇3 +42 -10
+                    let mut diff_parts: Vec<(String, Color)> = Vec::new();
+                    if files_changed > 0 {
+                        diff_parts.push((format!("◇{}", files_changed), Color::DarkGray));
                     }
                     if !additions.is_empty() {
-                        spans.push(Span::styled(
-                            format!("+{}", additions),
-                            sub_style(Color::Green),
-                        ));
-                    }
-                    if !additions.is_empty() && !deletions.is_empty() {
-                        spans.push(Span::styled(" ".to_string(), sub_style(Color::DarkGray)));
+                        diff_parts.push((format!("+{}", additions), Color::Green));
                     }
                     if !deletions.is_empty() {
-                        spans.push(Span::styled(
-                            format!("-{}", deletions),
-                            sub_style(Color::Red),
-                        ));
+                        diff_parts.push((format!("-{}", deletions), Color::Red));
                     }
-                } else if has_task {
-                    let task_max = width.saturating_sub(indent.len());
-                    let task =
-                        truncate_str(agent.task_description.as_deref().unwrap_or(""), task_max);
-                    spans.push(Span::styled(task, sub_style(Color::Gray)));
-                } else if has_diff {
-                    let diff_str = diff.as_deref().unwrap_or("");
-                    let (additions, deletions) = parse_diff_stats(diff_str);
-                    if !additions.is_empty() {
-                        spans.push(Span::styled(
-                            format!("+{}", additions),
-                            sub_style(Color::Green),
-                        ));
+                    let diff_display_len: usize = diff_parts.iter().map(|(s, _)| s.chars().count()).sum::<usize>()
+                        + diff_parts.len().saturating_sub(1); // spaces between parts
+
+                    if has_task {
+                        let task_max = width.saturating_sub(indent.len() + diff_display_len + 1);
+                        let task =
+                            truncate_str(agent.task_description.as_deref().unwrap_or(""), task_max);
+                        spans.push(Span::styled(task, sub_style(Color::Gray)));
+                        if !diff_parts.is_empty() {
+                            spans.push(Span::styled(" ".to_string(), sub_style(Color::DarkGray)));
+                        }
                     }
-                    if !additions.is_empty() && !deletions.is_empty() {
-                        spans.push(Span::styled(" ".to_string(), sub_style(Color::DarkGray)));
+                    for (i, (text, color)) in diff_parts.iter().enumerate() {
+                        if i > 0 {
+                            spans.push(Span::styled(" ".to_string(), sub_style(Color::DarkGray)));
+                        }
+                        spans.push(Span::styled(text.clone(), sub_style(*color)));
                     }
-                    if !deletions.is_empty() {
-                        spans.push(Span::styled(
-                            format!("-{}", deletions),
-                            sub_style(Color::Red),
-                        ));
-                    }
+
+                    items.push(ListItem::new(Line::from(spans)));
                 }
 
-                items.push(ListItem::new(Line::from(spans)));
+                // --- Current file line ---
+                if has_file {
+                    let file_path = shorten_path(
+                        agent.current_file.as_deref().unwrap_or(""),
+                        &agent.working_dir,
+                    );
+                    let file_max = width.saturating_sub(indent.len() + 2); // "✎ " prefix
+                    let file_display = truncate_str(&file_path, file_max);
+                    let file_line = Line::from(vec![
+                        Span::styled(indent.to_string(), sub_style(Color::DarkGray)),
+                        Span::styled("✎ ".to_string(), sub_style(Color::DarkGray)),
+                        Span::styled(file_display, sub_style(Color::Gray)),
+                    ]);
+                    items.push(ListItem::new(file_line));
+                }
             }
 
             agent_index += 1;
@@ -273,6 +277,57 @@ fn truncate_str(s: &str, max_len: usize) -> String {
     if display_len > max_len {
         let truncated: String = s.chars().take(max_len.saturating_sub(1)).collect();
         format!("{}…", truncated)
+    } else {
+        s.to_string()
+    }
+}
+
+fn format_relative_time(dt: &chrono::DateTime<chrono::Utc>) -> String {
+    let now = Utc::now();
+    let delta = now.signed_duration_since(*dt);
+    let secs = delta.num_seconds();
+    if secs < 0 {
+        return "now".to_string();
+    }
+    if secs < 60 {
+        format!("{}s", secs)
+    } else if secs < 3600 {
+        format!("{}m", secs / 60)
+    } else if secs < 86400 {
+        format!("{}h", secs / 3600)
+    } else {
+        format!("{}d", secs / 86400)
+    }
+}
+
+/// Strip the working_dir prefix from a file path to show just the
+/// project-relative portion. Falls back to the filename if the path
+/// is too long even after stripping.
+fn shorten_path(file: &str, working_dir: &str) -> String {
+    let stripped = if !working_dir.is_empty() {
+        file.strip_prefix(working_dir)
+            .or_else(|| file.strip_prefix(&format!("{}/", working_dir)))
+            .unwrap_or(file)
+    } else {
+        file
+    };
+    let stripped = stripped.strip_prefix('/').unwrap_or(stripped);
+    // If still too long, show just the filename
+    if stripped.chars().count() > 40 {
+        std::path::Path::new(stripped)
+            .file_name()
+            .map(|n| n.to_string_lossy().to_string())
+            .unwrap_or_else(|| truncated_path(stripped))
+    } else {
+        stripped.to_string()
+    }
+}
+
+fn truncated_path(s: &str) -> String {
+    let len = s.chars().count();
+    if len > 20 {
+        let tail: String = s.chars().skip(len - 20).collect();
+        format!("…{}", tail)
     } else {
         s.to_string()
     }

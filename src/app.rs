@@ -206,6 +206,7 @@ impl App {
             agent.activity = self.signal_watcher.get_activity(&agent.pane_id);
             agent.tool_executing = self.signal_watcher.get_tool_executing(&agent.pane_id);
             agent.sagas = self.signal_watcher.get_sagas(&agent.pane_id);
+            agent.current_file = self.signal_watcher.get_current_file(&agent.pane_id);
 
             if let Some(label) = self.signal_watcher.get_label(&agent.pane_id) {
                 let has_custom_name = self

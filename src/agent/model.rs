@@ -92,6 +92,7 @@ pub struct Agent {
     pub last_activity: DateTime<Utc>,
     pub diff_stats: Option<DiffStats>,
     pub worktree: Option<String>,
+    pub current_file: Option<String>,
     pub sagas: Vec<SagaInfo>,
 }
 
@@ -118,6 +119,7 @@ impl Agent {
             last_activity: Utc::now(),
             diff_stats: None,
             worktree: None,
+            current_file: None,
             sagas: Vec::new(),
         }
     }

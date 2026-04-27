@@ -218,6 +218,13 @@ impl SignalWatcher {
             .and_then(|s| s.sagas.clone())
             .unwrap_or_default()
     }
+
+    pub fn get_current_file(&self, pane_id: &str) -> Option<String> {
+        self.signals
+            .get(pane_id)
+            .filter(|s| !s.is_stale())
+            .and_then(|s| s.current_file.clone())
+    }
 }
 
 impl Default for SignalWatcher {
