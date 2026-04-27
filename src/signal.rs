@@ -75,9 +75,9 @@ impl SignalWatcher {
         let signal_dir = dirs::home_dir()
             .unwrap_or_else(|| PathBuf::from("~"))
             .join(SIGNAL_DIR);
-        
+
         std::fs::create_dir_all(&signal_dir)?;
-        
+
         let (tx, rx) = channel();
         let mut watcher = RecommendedWatcher::new(
             move |res| {
@@ -85,16 +85,16 @@ impl SignalWatcher {
             },
             notify::Config::default().with_poll_interval(Duration::from_secs(2)),
         )?;
-        
+
         watcher.watch(&signal_dir, RecursiveMode::NonRecursive)?;
-        
+
         let mut watcher = Self {
             signal_dir,
             _watcher: watcher,
             event_rx: rx,
             signals: HashMap::new(),
         };
-        
+
         watcher.load_existing_signals()?;
         Ok(watcher)
     }
@@ -123,7 +123,7 @@ impl SignalWatcher {
 
     pub fn poll(&mut self) -> Vec<String> {
         let mut changed = Vec::new();
-        
+
         while let Ok(result) = self.event_rx.try_recv() {
             if let Ok(event) = result {
                 if let Some(path) = event.paths.first() {
@@ -161,6 +161,13 @@ impl SignalWatcher {
             .filter(|s| !s.is_stale())
             .map(|s| s.to_status())
             .unwrap_or(AgentStatus::Unknown)
+    }
+
+    pub fn get_agent_type(&self, pane_id: &str) -> Option<String> {
+        self.signals
+            .get(pane_id)
+            .filter(|s| !s.is_stale())
+            .and_then(|s| s.agent_type.clone())
     }
 
     pub fn get_task(&self, pane_id: &str) -> Option<String> {

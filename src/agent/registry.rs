@@ -42,7 +42,39 @@ impl Default for AgentRegistry {
 
 pub fn create_default_registry() -> AgentRegistry {
     let mut registry = AgentRegistry::new();
-    registry.register(super::opencode::OpencodeDetector);
     registry.register(super::claude::ClaudeDetector);
     registry
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn pane_with(command: &str, title: &str) -> PaneInfo {
+        PaneInfo {
+            session_name: "main".to_string(),
+            window_id: "@1".to_string(),
+            pane_id: "%1".to_string(),
+            pane_title: title.to_string(),
+            current_command: command.to_string(),
+            current_path: "/tmp".to_string(),
+            is_active: true,
+        }
+    }
+
+    #[test]
+    fn default_registry_detects_claude() {
+        let registry = create_default_registry();
+        let pane = pane_with("claude", "claude");
+
+        assert_eq!(registry.detect(&pane), Some(AgentType::ClaudeCode));
+    }
+
+    #[test]
+    fn default_registry_does_not_detect_opencode_by_name() {
+        let registry = create_default_registry();
+        let pane = pane_with("zsh", "opencode");
+
+        assert_eq!(registry.detect(&pane), None);
+    }
 }

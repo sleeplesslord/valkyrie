@@ -1,9 +1,9 @@
-use crate::agent::{Agent, AgentStatus};
 use crate::agent::registry::create_default_registry;
+use crate::agent::{Agent, AgentStatus, AgentType};
 use crate::git;
 use crate::signal::SignalWatcher;
 use crate::state::{AppState, Config};
-use crate::tmux::Tmux;
+use crate::tmux::{PaneInfo, Tmux};
 use crate::worktree::WorktreeCache;
 use anyhow::Result;
 use chrono::{DateTime, Utc};
@@ -13,9 +13,13 @@ use std::collections::HashMap;
 pub enum Mode {
     #[default]
     Normal,
-    Rename { agent_id: String },
+    Rename {
+        agent_id: String,
+    },
     Help,
-    DiffView { agent_id: String },
+    DiffView {
+        agent_id: String,
+    },
 }
 
 pub struct App {
@@ -38,6 +42,24 @@ const PANE_DISCOVERY_INTERVAL: u64 = 20;
 const GIT_DIFF_INTERVAL: u64 = 40;
 const WORKTREE_REFRESH_INTERVAL: u64 = 200;
 
+fn parse_signal_agent_type(agent_type: &str) -> Option<AgentType> {
+    match agent_type.to_ascii_lowercase().as_str() {
+        "opencode" => Some(AgentType::Opencode),
+        "claude-code" => Some(AgentType::ClaudeCode),
+        _ => None,
+    }
+}
+
+fn is_sidebar_pane(sidebar_pane_id: Option<&str>, pane: &PaneInfo) -> bool {
+    if sidebar_pane_id != Some(pane.pane_id.as_str()) {
+        return false;
+    }
+
+    let cmd = pane.current_command.to_ascii_lowercase();
+    let title = pane.pane_title.to_ascii_lowercase();
+    cmd.contains("valkyrie") || title.contains("valkyrie")
+}
+
 impl App {
     pub fn new() -> Self {
         let tmux = Tmux::new();
@@ -48,12 +70,12 @@ impl App {
         });
         let state = AppState::load().unwrap_or_default();
         let config = Config::load().unwrap_or_default();
-        
+
         let mut worktree_cache = WorktreeCache::new();
         if let Some(root) = config.worktree_root() {
             worktree_cache.set_root(root);
         }
-        
+
         let mut app = Self {
             agents: Vec::new(),
             selection: 0,
@@ -108,22 +130,23 @@ impl App {
 
     pub fn agents_by_worktree(&self) -> Vec<(Option<String>, Vec<&Agent>)> {
         let mut groups: HashMap<Option<String>, Vec<&Agent>> = HashMap::new();
-        
+
         for agent in &self.agents {
-            groups.entry(agent.worktree.clone()).or_default().push(agent);
+            groups
+                .entry(agent.worktree.clone())
+                .or_default()
+                .push(agent);
         }
-        
+
         let mut result: Vec<(Option<String>, Vec<&Agent>)> = groups.into_iter().collect();
-        
-        result.sort_by(|a, b| {
-            match (&a.0, &b.0) {
-                (Some(_), None) => std::cmp::Ordering::Less,
-                (None, Some(_)) => std::cmp::Ordering::Greater,
-                (Some(a_name), Some(b_name)) => a_name.cmp(b_name),
-                (None, None) => std::cmp::Ordering::Equal,
-            }
+
+        result.sort_by(|a, b| match (&a.0, &b.0) {
+            (Some(_), None) => std::cmp::Ordering::Less,
+            (None, Some(_)) => std::cmp::Ordering::Greater,
+            (Some(a_name), Some(b_name)) => a_name.cmp(b_name),
+            (None, None) => std::cmp::Ordering::Equal,
         });
-        
+
         result
     }
 
@@ -151,7 +174,7 @@ impl App {
             if status != AgentStatus::Unknown {
                 agent.status = status;
             }
-            
+
             if let Some(task) = self.signal_watcher.get_task(&agent.pane_id) {
                 agent.task_description = Some(task);
             }
@@ -161,14 +184,16 @@ impl App {
             agent.sagas = self.signal_watcher.get_sagas(&agent.pane_id);
 
             if let Some(label) = self.signal_watcher.get_label(&agent.pane_id) {
-                let has_custom_name = self.state.get_name(&agent.pane_id)
+                let has_custom_name = self
+                    .state
+                    .get_name(&agent.pane_id)
                     .map(|n| !n.is_empty())
                     .unwrap_or(false);
                 if !has_custom_name {
                     agent.name = label;
                 }
             }
-            
+
             if let Some(worktree_path) = self.signal_watcher.get_worktree(&agent.pane_id) {
                 agent.working_dir = worktree_path.clone();
                 if let Some(root) = self.worktree_cache.root() {
@@ -181,7 +206,7 @@ impl App {
                     }
                 }
             }
-            
+
             agent.last_activity = Utc::now();
         }
     }
@@ -189,28 +214,43 @@ impl App {
     fn discover_panes(&mut self) {
         if let Ok(panes) = self.tmux.list_panes() {
             let registry = create_default_registry();
-            let current_ids: std::collections::HashSet<String> = 
+            let current_ids: std::collections::HashSet<String> =
                 self.agents.iter().map(|a| a.pane_id.clone()).collect();
-            
+
             let mut new_agents: Vec<Agent> = Vec::new();
-            let mut all_pane_ids: std::collections::HashSet<String> = std::collections::HashSet::new();
+            let mut all_pane_ids: std::collections::HashSet<String> =
+                std::collections::HashSet::new();
 
             for pane in panes {
-                if Some(&pane.pane_id) == self.sidebar_pane_id.as_ref() {
+                if is_sidebar_pane(self.sidebar_pane_id.as_deref(), &pane) {
                     continue;
                 }
 
                 all_pane_ids.insert(pane.pane_id.clone());
 
-                if let Some(agent_type) = registry.detect(&pane) {
+                let signal_agent_type = self
+                    .signal_watcher
+                    .get_agent_type(&pane.pane_id)
+                    .as_deref()
+                    .and_then(parse_signal_agent_type);
+
+                let detected_agent_type = signal_agent_type.or_else(|| registry.detect(&pane));
+
+                if let Some(agent_type) = detected_agent_type {
                     if !current_ids.contains(&pane.pane_id) {
                         new_agents.push(Agent::from_pane(&pane, agent_type));
-                    } else if let Some(existing) = self.agents.iter_mut().find(|a| a.pane_id == pane.pane_id) {
-                        let has_custom_name = self.state.get_name(&pane.pane_id)
+                    } else if let Some(existing) =
+                        self.agents.iter_mut().find(|a| a.pane_id == pane.pane_id)
+                    {
+                        let has_custom_name = self
+                            .state
+                            .get_name(&pane.pane_id)
                             .map(|n| !n.is_empty())
                             .unwrap_or(false);
                         if !has_custom_name {
-                            let new_name = if pane.pane_title.is_empty() || pane.pane_title == pane.current_command {
+                            let new_name = if pane.pane_title.is_empty()
+                                || pane.pane_title == pane.current_command
+                            {
                                 pane.current_command.clone()
                             } else {
                                 pane.pane_title.clone()
@@ -231,8 +271,9 @@ impl App {
             }
 
             self.agents.extend(new_agents);
-            self.agents.retain(|a| a.status != AgentStatus::Offline || current_ids.contains(&a.pane_id));
-            
+            self.agents
+                .retain(|a| a.status != AgentStatus::Offline || current_ids.contains(&a.pane_id));
+
             if self.selection >= self.agents.len() && !self.agents.is_empty() {
                 self.selection = self.agents.len() - 1;
             }
@@ -265,11 +306,8 @@ impl App {
 
     pub fn jump_to_selected(&self) -> Result<()> {
         if let Some(agent) = self.selected_agent() {
-            self.tmux.select_pane(
-                &agent.session_name,
-                &agent.window_id,
-                &agent.pane_id,
-            )?;
+            self.tmux
+                .select_pane(&agent.session_name, &agent.window_id, &agent.pane_id)?;
         }
         Ok(())
     }
@@ -288,7 +326,7 @@ impl App {
             if !new_name.is_empty() {
                 self.state.set_name(agent_id, new_name);
                 self.state.save()?;
-                
+
                 if let Some(agent) = self.agents.iter_mut().find(|a| &a.pane_id == agent_id) {
                     agent.name = new_name.to_string();
                 }
@@ -353,5 +391,49 @@ impl App {
 impl Default for App {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn pane_with(id: &str, command: &str, title: &str) -> PaneInfo {
+        PaneInfo {
+            session_name: "main".to_string(),
+            window_id: "@0".to_string(),
+            pane_id: id.to_string(),
+            pane_title: title.to_string(),
+            current_command: command.to_string(),
+            current_path: "/tmp".to_string(),
+            is_active: false,
+        }
+    }
+
+    #[test]
+    fn parse_signal_agent_type_maps_supported_values() {
+        assert_eq!(
+            parse_signal_agent_type("opencode"),
+            Some(AgentType::Opencode)
+        );
+        assert_eq!(
+            parse_signal_agent_type("OPENCODE"),
+            Some(AgentType::Opencode)
+        );
+        assert_eq!(
+            parse_signal_agent_type("claude-code"),
+            Some(AgentType::ClaudeCode)
+        );
+        assert_eq!(parse_signal_agent_type("unknown"), None);
+    }
+
+    #[test]
+    fn sidebar_pane_requires_matching_id_and_identity() {
+        let sidebar = pane_with("%9", "valkyrie", "valkyrie");
+        let reused = pane_with("%9", "zsh", "opencode");
+
+        assert!(is_sidebar_pane(Some("%9"), &sidebar));
+        assert!(!is_sidebar_pane(Some("%9"), &reused));
+        assert!(!is_sidebar_pane(Some("%8"), &sidebar));
     }
 }
