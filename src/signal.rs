@@ -13,12 +13,14 @@ const STALE_THRESHOLD_SECS: i64 = 60;
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct SagaInfo {
+    #[allow(dead_code)]
     pub id: String,
     pub title: String,
     pub status: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]
+#[allow(dead_code)]
 pub struct SignalFile {
     pub version: Option<i32>,
     pub agent_type: Option<String>,
@@ -151,10 +153,6 @@ impl SignalWatcher {
         changed
     }
 
-    pub fn get_signal(&self, pane_id: &str) -> Option<&SignalFile> {
-        self.signals.get(pane_id)
-    }
-
     pub fn get_status(&self, pane_id: &str) -> AgentStatus {
         self.signals
             .get(pane_id)
@@ -184,6 +182,7 @@ impl SignalWatcher {
             .and_then(|s| s.worktree.clone())
     }
 
+    #[allow(dead_code)]
     pub fn get_working_dir(&self, pane_id: &str) -> Option<String> {
         self.signals
             .get(pane_id)

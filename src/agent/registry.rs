@@ -29,6 +29,7 @@ impl AgentRegistry {
         None
     }
 
+    #[allow(dead_code)]
     pub fn is_agent_pane(&self, pane: &PaneInfo) -> bool {
         self.detectors.iter().any(|d| d.detect(pane).is_some())
     }

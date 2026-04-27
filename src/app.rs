@@ -18,7 +18,7 @@ pub enum Mode {
     },
     Help,
     DiffView {
-        agent_id: String,
+        _agent_id: String,
     },
 }
 
@@ -34,7 +34,7 @@ pub struct App {
     sidebar_pane_id: Option<String>,
     signal_watcher: SignalWatcher,
     state: AppState,
-    config: Config,
+    _config: Config,
     worktree_cache: WorktreeCache,
 }
 
@@ -112,7 +112,7 @@ impl App {
             sidebar_pane_id,
             signal_watcher,
             state,
-            config,
+            _config: config,
             worktree_cache,
         };
         app.discover_panes();
@@ -318,10 +318,6 @@ impl App {
         self.agents.get(self.selection)
     }
 
-    pub fn selected_agent_mut(&mut self) -> Option<&mut Agent> {
-        self.agents.get_mut(self.selection)
-    }
-
     pub fn jump_to_selected(&self) -> Result<()> {
         if let Some(agent) = self.selected_agent() {
             // Switch window first, then focus the pane — select-pane alone
@@ -405,7 +401,9 @@ impl App {
                 .unwrap_or_else(|| "Not a git repository".to_string());
             self.input_buffer = diff;
             self.diff_scroll = 0;
-            self.mode = Mode::DiffView { agent_id };
+            self.mode = Mode::DiffView {
+                _agent_id: agent_id,
+            };
         }
     }
 

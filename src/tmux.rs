@@ -9,12 +9,14 @@ pub struct PaneInfo {
     pub pane_title: String,
     pub current_command: String,
     pub current_path: String,
+    #[allow(dead_code)]
     pub is_active: bool,
 }
 
 #[derive(Debug, Clone)]
 pub struct Tmux;
 
+#[allow(dead_code)]
 impl Tmux {
     pub fn new() -> Self {
         Self

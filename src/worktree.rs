@@ -1,4 +1,3 @@
-use anyhow::Result;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -115,35 +114,6 @@ fn parse_worktree_list(output: &str, root: &Path) -> Vec<WorktreeInfo> {
     }
 
     worktrees
-}
-
-pub fn detect_worktree(working_dir: &str, root: &Path) -> Option<WorktreeInfo> {
-    let path = PathBuf::from(working_dir);
-
-    if !path.join(".git").exists() {
-        return None;
-    }
-
-    let git_file = path.join(".git");
-    if git_file.is_file() {
-        if let Ok(content) = std::fs::read_to_string(&git_file) {
-            if content.starts_with("gitdir:") {
-                let relative = path
-                    .strip_prefix(root)
-                    .map(|p| p.to_string_lossy().to_string())
-                    .unwrap_or_else(|_| path.display().to_string());
-
-                return Some(WorktreeInfo {
-                    path,
-                    relative,
-                    branch: None,
-                    head: None,
-                });
-            }
-        }
-    }
-
-    None
 }
 
 #[cfg(test)]
