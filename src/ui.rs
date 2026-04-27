@@ -109,8 +109,9 @@ fn render_agent_list(f: &mut Frame, app: &App, area: Rect) {
 
             let prefix = if worktree.is_some() { "  " } else { "" };
 
+            let pointer = if is_selected { "▸ " } else { "  " };
             let indicator_width = status_indicator.chars().count();
-            let name_max = width.saturating_sub(prefix.len() + indicator_width + 2);
+            let name_max = width.saturating_sub(pointer.chars().count() + prefix.len() + indicator_width + 2);
             let name = truncate_str(&agent.name, name_max);
 
             let (indicator_style, name_style) = if is_selected {
@@ -127,7 +128,8 @@ fn render_agent_list(f: &mut Frame, app: &App, area: Rect) {
 
             let rel_time = format_relative_time(&agent.last_activity);
             let line1 = Line::from(vec![
-                Span::styled(format!("{}{} ", prefix, status_indicator), indicator_style),
+                Span::styled(format!("{}{}", prefix, pointer), Style::default().fg(if is_selected { status_color } else { Color::DarkGray })),
+                Span::styled(format!("{} ", status_indicator), indicator_style),
                 Span::styled(name, name_style),
                 Span::styled(format!(" {}", rel_time), Style::default().fg(Color::DarkGray)),
             ]);
