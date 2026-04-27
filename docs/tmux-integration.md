@@ -5,14 +5,14 @@
 ### Launch Command
 
 ```bash
-tmux split-window -hb -l 30 -c "#{pane_current_path}" "valkyrie"
+tmux split-window -hb -l 50 -c "#{pane_current_path}" "valkyrie"
 ```
 
 | Flag | Purpose |
 |------|---------|
 | `-h` | Horizontal split (creates vertical pane) |
 | `-b` | Split to left (before current pane) |
-| `-l 30` | Fixed width of 30 columns |
+| `-l 50` | Fixed width of 50 columns |
 | `-c` | Start in current working directory |
 
 ### Session Attachment
@@ -118,6 +118,14 @@ TMUX=/tmp/tmux-1000/default,1234,0
 Run `valkyrie setup-tmux` to print the recommended configuration. Add the output to `~/.tmux.conf` and reload with `tmux source ~/.tmux.conf`.
 If you previously configured auto-follow, remove any `session-window-changed` hook that runs `move-sidebar-to-current.sh`.
 
+Sidebar width defaults to 50 columns and can be changed with:
+
+```bash
+valkyrie config set-sidebar-width 65
+```
+
+After updating width, run `valkyrie setup-tmux` again if your installed scripts are outdated.
+
 ### Toggle Sidebar
 
 The `toggle-sidebar.sh` script provides toggle functionality:
@@ -146,7 +154,10 @@ For automatic sidebar on session creation:
 
 ```bash
 # In ~/.tmux.conf
-set-hook -g session-created 'split-window -hb -l 30 "valkyrie"'
+set-hook -g session-created 'split-window -hb -l 50 "valkyrie"'
+
+# Or use a configured width value
+set-hook -g session-created 'split-window -hb -l "$(valkyrie config get-sidebar-width)" "valkyrie"'
 ```
 
 Note: Currently not recommended; manual launch preferred.

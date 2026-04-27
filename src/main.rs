@@ -19,7 +19,7 @@ use crossterm::{
 };
 use event::Event;
 use ratatui::{backend::CrosstermBackend, Terminal};
-use state::Config;
+use state::{Config, DEFAULT_SIDEBAR_WIDTH};
 use std::fs::OpenOptions;
 use std::io;
 use std::os::unix::io::AsRawFd;
@@ -39,7 +39,7 @@ struct Args {
     #[command(subcommand)]
     command: Option<Commands>,
 
-    #[arg(short, long, default_value = "30")]
+    #[arg(short, long, default_value_t = DEFAULT_SIDEBAR_WIDTH)]
     width: u16,
 }
 
@@ -72,6 +72,18 @@ enum ConfigCommands {
     },
     #[command(about = "Clear worktree root configuration")]
     ClearWorktreeRoot,
+    #[command(about = "Set sidebar width in columns")]
+    SetSidebarWidth {
+        #[arg(
+            help = "Sidebar width in columns",
+            value_parser = clap::value_parser!(u16).range(1..)
+        )]
+        width: u16,
+    },
+    #[command(about = "Clear configured sidebar width")]
+    ClearSidebarWidth,
+    #[command(about = "Print effective sidebar width")]
+    GetSidebarWidth,
     #[command(about = "Show current configuration")]
     Show,
 }
@@ -142,13 +154,43 @@ fn handle_config_command(command: ConfigCommands) -> Result<()> {
 
             println!("Worktree root cleared.");
         }
+        ConfigCommands::SetSidebarWidth { width } => {
+            let mut config = Config::load().unwrap_or_default();
+            config.sidebar_width = Some(width);
+            config.save()?;
+
+            println!("Sidebar width set to: {}", width);
+        }
+        ConfigCommands::ClearSidebarWidth => {
+            let mut config = Config::load().unwrap_or_default();
+            config.sidebar_width = None;
+            config.save()?;
+
+            println!(
+                "Sidebar width cleared. Using default: {}",
+                DEFAULT_SIDEBAR_WIDTH
+            );
+        }
+        ConfigCommands::GetSidebarWidth => {
+            let config = Config::load().unwrap_or_default();
+            println!("{}", config.sidebar_width());
+        }
         ConfigCommands::Show => {
             let config = Config::load().unwrap_or_default();
+            let effective_sidebar_width = config.sidebar_width();
 
             println!("Current configuration:");
-            match config.worktree_root {
+            match &config.worktree_root {
                 Some(root) => println!("  worktree_root: {}", root),
                 None => println!("  worktree_root: (not set)"),
+            }
+            match config.sidebar_width {
+                Some(width) if width > 0 => println!("  sidebar_width: {}", width),
+                Some(_) => println!(
+                    "  sidebar_width: {} (default, invalid configured value)",
+                    effective_sidebar_width
+                ),
+                None => println!("  sidebar_width: {} (default)", effective_sidebar_width),
             }
         }
     }
@@ -258,9 +300,8 @@ fn init_logging() -> Result<()> {
     Ok(())
 }
 
-async fn run_tui(width: u16) -> Result<()> {
+async fn run_tui(_width: u16) -> Result<()> {
     check_tmux()?;
-    let _width = width;
 
     init_logging()?;
 

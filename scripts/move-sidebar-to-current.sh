@@ -1,8 +1,18 @@
 #!/bin/bash
 
 SIDEBAR_STATE="$HOME/.valkyrie/sidebar-pane"
-SIDEBAR_WIDTH="30"
+DEFAULT_SIDEBAR_WIDTH="50"
 LOCK_NAME="valkyrie-sidebar-move"
+
+get_sidebar_width() {
+    local configured_width
+    configured_width=$(valkyrie config get-sidebar-width 2>/dev/null)
+    if [[ "$configured_width" =~ ^[0-9]+$ ]] && [[ "$configured_width" -gt 0 ]]; then
+        echo "$configured_width"
+    else
+        echo "$DEFAULT_SIDEBAR_WIDTH"
+    fi
+}
 
 get_current_window() {
     tmux display-message -p '#{window_id}'
@@ -34,6 +44,9 @@ main() {
     tmux wait-for -L "$LOCK_NAME" 2>/dev/null || exit 0
     trap 'tmux wait-for -U "$LOCK_NAME" 2>/dev/null' EXIT
 
+    local sidebar_width
+    sidebar_width=$(get_sidebar_width)
+
     local sidebar_pane
     sidebar_pane=$(get_sidebar_info)
 
@@ -52,8 +65,8 @@ main() {
     local leftmost_pane
     leftmost_pane=$(tmux list-panes -t "$current_window" -F '#{pane_left} #{pane_id}' | sort -n | head -1 | awk '{print $2}')
 
-    tmux join-pane -bdfh -l "$SIDEBAR_WIDTH" -s "$sidebar_pane" -t "$leftmost_pane" 2>/dev/null || exit 0
-    tmux resize-pane -t "$sidebar_pane" -x "$SIDEBAR_WIDTH" 2>/dev/null || true
+    tmux join-pane -bdfh -l "$sidebar_width" -s "$sidebar_pane" -t "$leftmost_pane" 2>/dev/null || exit 0
+    tmux resize-pane -t "$sidebar_pane" -x "$sidebar_width" 2>/dev/null || true
 }
 
 main

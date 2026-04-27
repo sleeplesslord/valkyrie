@@ -51,6 +51,12 @@ valkyrie
 # Configure worktree root for grouping
 valkyrie config set-worktree-root /path/to/project
 
+# Configure sidebar width (default: 50 columns)
+valkyrie config set-sidebar-width 65
+
+# Clear custom sidebar width and use default
+valkyrie config clear-sidebar-width
+
 # Show current config
 valkyrie config show
 ```

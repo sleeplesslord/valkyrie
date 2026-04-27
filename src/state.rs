@@ -5,6 +5,7 @@ use std::path::PathBuf;
 
 const STATE_FILE: &str = ".valkyrie/state.json";
 const CONFIG_FILE: &str = ".valkyrie/config.json";
+pub const DEFAULT_SIDEBAR_WIDTH: u16 = 50;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct AgentState {
@@ -21,6 +22,8 @@ pub struct AppState {
 pub struct Config {
     #[serde(default)]
     pub worktree_root: Option<String>,
+    #[serde(default)]
+    pub sidebar_width: Option<u16>,
 }
 
 impl Config {
@@ -52,10 +55,42 @@ impl Config {
         self.worktree_root.as_ref().map(PathBuf::from)
     }
 
+    pub fn sidebar_width(&self) -> u16 {
+        self.sidebar_width
+            .filter(|width| *width > 0)
+            .unwrap_or(DEFAULT_SIDEBAR_WIDTH)
+    }
+
     fn config_path() -> PathBuf {
         dirs::home_dir()
             .unwrap_or_else(|| PathBuf::from("~"))
             .join(CONFIG_FILE)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sidebar_width_defaults_to_constant() {
+        let config = Config::default();
+        assert_eq!(config.sidebar_width(), DEFAULT_SIDEBAR_WIDTH);
+    }
+
+    #[test]
+    fn sidebar_width_uses_configured_value() {
+        let config = Config {
+            worktree_root: None,
+            sidebar_width: Some(72),
+        };
+        assert_eq!(config.sidebar_width(), 72);
+    }
+
+    #[test]
+    fn deserialize_legacy_config_without_sidebar_width() {
+        let config: Config = serde_json::from_str(r#"{"worktree_root":"/tmp/project"}"#).unwrap();
+        assert_eq!(config.sidebar_width(), DEFAULT_SIDEBAR_WIDTH);
     }
 }
 

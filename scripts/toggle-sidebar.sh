@@ -1,10 +1,20 @@
 #!/bin/bash
 
 SIDEBAR_STATE="$HOME/.valkyrie/sidebar-pane"
-SIDEBAR_WIDTH="30"
+DEFAULT_SIDEBAR_WIDTH="50"
 SIDEBAR_HIDDEN_SESSION="__valkyrie_hidden__"
 SIDEBAR_HIDDEN_WINDOW="__sidebar_hidden__"
 SIDEBAR_HIDDEN_BOOTSTRAP="__valkyrie_bootstrap__"
+
+get_sidebar_width() {
+    local configured_width
+    configured_width=$(valkyrie config get-sidebar-width 2>/dev/null)
+    if [[ "$configured_width" =~ ^[0-9]+$ ]] && [[ "$configured_width" -gt 0 ]]; then
+        echo "$configured_width"
+    else
+        echo "$DEFAULT_SIDEBAR_WIDTH"
+    fi
+}
 
 get_current_window() {
     tmux display-message -p '#{window_id}'
@@ -59,17 +69,19 @@ hide_sidebar() {
 
 show_sidebar_in_current_window() {
     local pane_id="$1"
+    local sidebar_width="$2"
     local current_window
     current_window=$(get_current_window)
 
     local leftmost_pane
     leftmost_pane=$(tmux list-panes -t "$current_window" -F '#{pane_left} #{pane_id}' | sort -n | head -1 | awk '{print $2}')
 
-    tmux join-pane -bdfh -l "$SIDEBAR_WIDTH" -s "$pane_id" -t "$leftmost_pane" 2>/dev/null || return 1
-    tmux resize-pane -t "$pane_id" -x "$SIDEBAR_WIDTH" 2>/dev/null || true
+    tmux join-pane -bdfh -l "$sidebar_width" -s "$pane_id" -t "$leftmost_pane" 2>/dev/null || return 1
+    tmux resize-pane -t "$pane_id" -x "$sidebar_width" 2>/dev/null || true
 }
 
 spawn_sidebar() {
+    local sidebar_width="$1"
     local current_path
     current_path=$(tmux display-message -p '#{pane_current_path}')
     local current_window
@@ -78,10 +90,13 @@ spawn_sidebar() {
     local leftmost_pane
     leftmost_pane=$(tmux list-panes -t "$current_window" -F '#{pane_left} #{pane_id}' | sort -n | head -1 | awk '{print $2}')
 
-    tmux split-window -bdfh -l "$SIDEBAR_WIDTH" -c "$current_path" -t "$leftmost_pane" "valkyrie" >/dev/null 2>&1 || return 1
+    tmux split-window -bdfh -l "$sidebar_width" -c "$current_path" -t "$leftmost_pane" "valkyrie" >/dev/null 2>&1 || return 1
 }
 
 main() {
+    local sidebar_width
+    sidebar_width=$(get_sidebar_width)
+
     local sidebar_pane
     sidebar_pane=$(get_sidebar_info)
 
@@ -93,10 +108,10 @@ main() {
         if [[ "$sidebar_window" == "$current_window" ]]; then
             hide_sidebar "$sidebar_pane"
         else
-            show_sidebar_in_current_window "$sidebar_pane"
+            show_sidebar_in_current_window "$sidebar_pane" "$sidebar_width"
         fi
     else
-        spawn_sidebar
+        spawn_sidebar "$sidebar_width"
     fi
 }
 
