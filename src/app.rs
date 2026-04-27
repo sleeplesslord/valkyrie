@@ -50,6 +50,30 @@ fn parse_signal_agent_type(agent_type: &str) -> Option<AgentType> {
     }
 }
 
+fn pane_default_name(pane: &PaneInfo) -> String {
+    if pane.pane_title.is_empty() || pane.pane_title == pane.current_command {
+        pane.current_command.clone()
+    } else {
+        pane.pane_title.clone()
+    }
+}
+
+fn resolve_agent_name(
+    pane: &PaneInfo,
+    saved_name: Option<&str>,
+    signal_label: Option<String>,
+) -> String {
+    if let Some(name) = saved_name.filter(|n| !n.is_empty()) {
+        return name.to_string();
+    }
+
+    if let Some(label) = signal_label {
+        return label;
+    }
+
+    pane_default_name(pane)
+}
+
 fn is_sidebar_pane(sidebar_pane_id: Option<&str>, pane: &PaneInfo) -> bool {
     if sidebar_pane_id != Some(pane.pane_id.as_str()) {
         return false;
@@ -237,26 +261,20 @@ impl App {
                 let detected_agent_type = signal_agent_type.or_else(|| registry.detect(&pane));
 
                 if let Some(agent_type) = detected_agent_type {
+                    let resolved_name = resolve_agent_name(
+                        &pane,
+                        self.state.get_name(&pane.pane_id),
+                        self.signal_watcher.get_label(&pane.pane_id),
+                    );
+
                     if !current_ids.contains(&pane.pane_id) {
-                        new_agents.push(Agent::from_pane(&pane, agent_type));
+                        let mut new_agent = Agent::from_pane(&pane, agent_type);
+                        new_agent.name = resolved_name;
+                        new_agents.push(new_agent);
                     } else if let Some(existing) =
                         self.agents.iter_mut().find(|a| a.pane_id == pane.pane_id)
                     {
-                        let has_custom_name = self
-                            .state
-                            .get_name(&pane.pane_id)
-                            .map(|n| !n.is_empty())
-                            .unwrap_or(false);
-                        if !has_custom_name {
-                            let new_name = if pane.pane_title.is_empty()
-                                || pane.pane_title == pane.current_command
-                            {
-                                pane.current_command.clone()
-                            } else {
-                                pane.pane_title.clone()
-                            };
-                            existing.name = new_name;
-                        }
+                        existing.name = resolved_name;
                     }
                 }
             }
@@ -435,5 +453,32 @@ mod tests {
         assert!(is_sidebar_pane(Some("%9"), &sidebar));
         assert!(!is_sidebar_pane(Some("%9"), &reused));
         assert!(!is_sidebar_pane(Some("%8"), &sidebar));
+    }
+
+    #[test]
+    fn resolve_agent_name_prioritizes_saved_name() {
+        let pane = pane_with("%1", "zsh", "OC");
+
+        let resolved = resolve_agent_name(&pane, Some("My Agent"), Some("Label".to_string()));
+
+        assert_eq!(resolved, "My Agent");
+    }
+
+    #[test]
+    fn resolve_agent_name_uses_signal_label_before_tmux_name() {
+        let pane = pane_with("%1", "zsh", "OC");
+
+        let resolved = resolve_agent_name(&pane, None, Some("Feature Branch".to_string()));
+
+        assert_eq!(resolved, "Feature Branch");
+    }
+
+    #[test]
+    fn resolve_agent_name_falls_back_to_tmux_name() {
+        let pane = pane_with("%1", "zsh", "OC");
+
+        let resolved = resolve_agent_name(&pane, None, None);
+
+        assert_eq!(resolved, "OC");
     }
 }
