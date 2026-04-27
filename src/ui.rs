@@ -79,17 +79,17 @@ fn render_agent_list(f: &mut Frame, app: &App, area: Rect) {
             let status_color = match agent.status {
                 crate::agent::AgentStatus::Running => {
                     match agent.activity.as_deref() {
-                        Some("coding") => Color::Green,
-                        Some("exploring") => Color::Cyan,
-                        Some("running") => Color::Yellow,
-                        Some("researching") => Color::Magenta,
+                        Some("coding") => Color::Rgb(80, 250, 123),
+                        Some("exploring") => Color::Rgb(0, 245, 255),
+                        Some("running") => Color::Rgb(241, 250, 140),
+                        Some("researching") => Color::Rgb(255, 121, 198),
                         Some("thinking") => Color::White,
-                        _ => Color::Green,
+                        _ => Color::Rgb(80, 250, 123),
                     }
                 }
-                crate::agent::AgentStatus::Idle => Color::Gray,
-                crate::agent::AgentStatus::WaitingInput => Color::Yellow,
-                crate::agent::AgentStatus::Error => Color::Red,
+                crate::agent::AgentStatus::Idle => Color::Rgb(150, 150, 150),
+                crate::agent::AgentStatus::WaitingInput => Color::Rgb(241, 250, 140),
+                crate::agent::AgentStatus::Error => Color::Rgb(255, 85, 85),
                 crate::agent::AgentStatus::Offline => Color::DarkGray,
                 crate::agent::AgentStatus::Unknown => Color::Blue,
             };
@@ -120,7 +120,7 @@ fn render_agent_list(f: &mut Frame, app: &App, area: Rect) {
                 )
             } else {
                 (
-                    Style::default().fg(status_color),
+                    Style::default().fg(status_color).bold(),
                     Style::default().fg(name_color),
                 )
             };

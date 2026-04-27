@@ -28,7 +28,7 @@ pub enum AgentStatus {
     Unknown,
 }
 
-const SPINNER_FRAMES: &[&str] = &["⠋", "⠙", "⠹", "⠸", "⠴", "⠦", "⠧", "⠇", "⠏", "⠋"];
+const SPINNER_FRAMES: &[&str] = &["░", "▒", "▓", "█", "▓", "▒"];
 
 impl AgentStatus {
     pub fn indicator(&self, activity: Option<&str>, tool: Option<&str>, tick_count: u64) -> String {
