@@ -112,17 +112,20 @@ fn render_agent_list(f: &mut Frame, app: &App, area: Rect) {
             let name_max = width.saturating_sub(prefix.len() + indicator_width + 2);
             let name = truncate_str(&agent.name, name_max);
 
-            let name_style = if is_selected {
-                Style::default().fg(name_color).bold()
+            let (indicator_style, name_style) = if is_selected {
+                (
+                    Style::default().fg(Color::Black).bg(status_color),
+                    Style::default().fg(Color::Black).bg(name_color).bold(),
+                )
             } else {
-                Style::default().fg(name_color)
+                (
+                    Style::default().fg(status_color),
+                    Style::default().fg(name_color),
+                )
             };
 
             let line1 = Line::from(vec![
-                Span::styled(
-                    format!("{}{} ", prefix, status_indicator),
-                    Style::default().fg(status_color),
-                ),
+                Span::styled(format!("{}{} ", prefix, status_indicator), indicator_style),
                 Span::styled(name, name_style),
             ]);
             items.push(ListItem::new(line1));
@@ -137,7 +140,12 @@ fn render_agent_list(f: &mut Frame, app: &App, area: Rect) {
 
             if has_task || has_diff {
                 let indent = if worktree.is_some() { "    " } else { "  " };
-                let mut spans: Vec<Span> = vec![Span::styled(indent.to_string(), Style::default())];
+                let sub_bg = if is_selected { Some(Color::DarkGray) } else { None };
+                let sub_style = |fg: Color| match sub_bg {
+                    Some(bg) => Style::default().fg(fg).bg(bg),
+                    None => Style::default().fg(fg),
+                };
+                let mut spans: Vec<Span> = vec![Span::styled(indent.to_string(), sub_style(Color::DarkGray))];
 
                 if has_task && has_diff {
                     let diff_str = diff.as_deref().unwrap_or("");
@@ -154,46 +162,46 @@ fn render_agent_list(f: &mut Frame, app: &App, area: Rect) {
                     let task_max = width.saturating_sub(indent.len() + diff_display_len + 1);
                     let task =
                         truncate_str(agent.task_description.as_deref().unwrap_or(""), task_max);
-                    spans.push(Span::styled(task, Style::default().fg(Color::Gray)));
+                    spans.push(Span::styled(task, sub_style(Color::Gray)));
                     if diff_display_len > 0 {
-                        spans.push(Span::styled(" ".to_string(), Style::default()));
+                        spans.push(Span::styled(" ".to_string(), sub_style(Color::DarkGray)));
                     }
                     if !additions.is_empty() {
                         spans.push(Span::styled(
                             format!("+{}", additions),
-                            Style::default().fg(Color::Green),
+                            sub_style(Color::Green),
                         ));
                     }
                     if !additions.is_empty() && !deletions.is_empty() {
-                        spans.push(Span::styled(" ".to_string(), Style::default()));
+                        spans.push(Span::styled(" ".to_string(), sub_style(Color::DarkGray)));
                     }
                     if !deletions.is_empty() {
                         spans.push(Span::styled(
                             format!("-{}", deletions),
-                            Style::default().fg(Color::Red),
+                            sub_style(Color::Red),
                         ));
                     }
                 } else if has_task {
                     let task_max = width.saturating_sub(indent.len());
                     let task =
                         truncate_str(agent.task_description.as_deref().unwrap_or(""), task_max);
-                    spans.push(Span::styled(task, Style::default().fg(Color::Gray)));
+                    spans.push(Span::styled(task, sub_style(Color::Gray)));
                 } else if has_diff {
                     let diff_str = diff.as_deref().unwrap_or("");
                     let (additions, deletions) = parse_diff_stats(diff_str);
                     if !additions.is_empty() {
                         spans.push(Span::styled(
                             format!("+{}", additions),
-                            Style::default().fg(Color::Green),
+                            sub_style(Color::Green),
                         ));
                     }
                     if !additions.is_empty() && !deletions.is_empty() {
-                        spans.push(Span::styled(" ".to_string(), Style::default()));
+                        spans.push(Span::styled(" ".to_string(), sub_style(Color::DarkGray)));
                     }
                     if !deletions.is_empty() {
                         spans.push(Span::styled(
                             format!("-{}", deletions),
-                            Style::default().fg(Color::Red),
+                            sub_style(Color::Red),
                         ));
                     }
                 }
@@ -219,22 +227,35 @@ fn render_agent_list(f: &mut Frame, app: &App, area: Rect) {
                 let used = saga_indent.len() + saga_status_str.len() + 1;
                 let saga_title_max = width.saturating_sub(used);
                 let saga_title = truncate_str(&saga.title, saga_title_max);
+                let saga_bg = if is_selected { Some(Color::DarkGray) } else { None };
+                let saga_style = |fg: Color| match saga_bg {
+                    Some(bg) => Style::default().fg(fg).bg(bg),
+                    None => Style::default().fg(fg),
+                };
                 let saga_line = Line::from(vec![
-                    Span::styled(saga_indent.to_string(), Style::default()),
+                    Span::styled(saga_indent.to_string(), saga_style(Color::DarkGray)),
                     Span::styled(
                         saga_status_str.to_string(),
-                        Style::default().fg(saga_status_color),
+                        saga_style(saga_status_color),
                     ),
-                    Span::styled(" ".to_string(), Style::default()),
-                    Span::styled(saga_title, Style::default().fg(saga_title_color)),
+                    Span::styled(" ".to_string(), saga_style(Color::DarkGray)),
+                    Span::styled(saga_title, saga_style(saga_title_color)),
                 ]);
                 items.push(ListItem::new(saga_line));
             }
         }
 
-        items.push(ListItem::new(Line::from("")));
+        // Add a thin separator between worktree groups
+        if !items.is_empty() {
+            let separator = "─".repeat(width);
+            items.push(ListItem::new(Line::styled(
+                separator,
+                Style::default().fg(Color::DarkGray),
+            )));
+        }
     }
 
+    // Remove the trailing separator after the last group
     if !items.is_empty() {
         items.pop();
     }
@@ -342,14 +363,16 @@ fn render_diff_view(f: &mut Frame, app: &App) {
                 Style::default()
                     .fg(Color::Yellow)
                     .add_modifier(Modifier::BOLD)
-            } else if line.starts_with("---") || line.starts_with("+++") {
-                Style::default().fg(Color::Magenta)
+            } else if line.starts_with("---") {
+                Style::default().fg(Color::Magenta).bg(Color::DarkGray)
+            } else if line.starts_with("+++") {
+                Style::default().fg(Color::Magenta).bg(Color::DarkGray)
             } else if line.starts_with("@@") {
                 Style::default().fg(Color::Cyan)
             } else if line.starts_with('+') {
-                Style::default().fg(Color::Green)
+                Style::default().fg(Color::Green).bg(Color::Rgb(0, 40, 0))
             } else if line.starts_with('-') {
-                Style::default().fg(Color::Red)
+                Style::default().fg(Color::Red).bg(Color::Rgb(40, 0, 0))
             } else {
                 Style::default().fg(Color::White)
             };
