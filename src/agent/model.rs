@@ -28,19 +28,20 @@ pub enum AgentStatus {
     Unknown,
 }
 
-const WAVE_BLOCKS: &[&str] = &["░", "▒", "▓", "█"];
+const WAVE_BLOCKS: &[&str] = &["░", "▒", "▓", "█", "▓", "▒"];
 
-/// 3-char wave pulser: each column peaks at a different tick offset.
-/// Produces patterns like ░░▓ ░▓▒ ▓▒░ █▓▓ ▓█▒ … creating a rolling wave.
+/// 3-char wave that scrolls continuously left-to-right.
+/// Includes descending half in WAVE_BLOCKS so the pattern wraps
+/// seamlessly without bouncing: ░▒▓█▓▒░▒▓█▓▒…
 fn wave_frame(tick: u64) -> String {
     let t = tick as usize;
     let n = WAVE_BLOCKS.len();
     let mut out = String::with_capacity(6);
     for col in 0..3 {
-        // Each column is offset by 1 tick, stepped every 2 ticks for a smooth wave
-        let phase = (t / 2 + col) % (n * 2);
-        let idx = if phase < n { phase } else { n * 2 - 1 - phase };
-        out.push_str(WAVE_BLOCKS[idx.min(n - 1)]);
+        // Right columns lead so the peak moves left-to-right;
+        // stepped every 2 ticks for a smooth wave.
+        let idx = (t / 2 + 2 - col) % n;
+        out.push_str(WAVE_BLOCKS[idx]);
     }
     out
 }
