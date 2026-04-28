@@ -365,7 +365,7 @@ fn parse_diff_stats(diff: &str) -> (String, String) {
 fn render_footer(f: &mut Frame, app: &App, area: Rect) {
     let help_text = match app.mode {
         Mode::Normal => {
-            " j/k:nav | Enter:jump | w:worktree | r:rename | d:diff | D:diff window | ?:help | q:quit "
+            " j/k:nav | Enter:jump | w:worktree | r:rename | d:diff | D:diff window | x:cleanup | X:cleanup all | ?:help | q:quit "
         }
         Mode::Rename { .. } => " Enter:save | Esc:cancel ",
         Mode::Help => " any key to close ",
@@ -386,6 +386,8 @@ fn render_help_overlay(f: &mut Frame) {
         Line::from(" Enter   Jump to agent pane"),
         Line::from(" w       Open worktree in new window"),
         Line::from(" r       Rename agent"),
+        Line::from(" x       Cleanup offline agent"),
+        Line::from(" X       Cleanup all offline agents"),
         Line::from(" d       View git diff (overlay)"),
         Line::from(" D       Open diff in new window"),
         Line::from(" ?       Toggle this help"),

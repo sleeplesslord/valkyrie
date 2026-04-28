@@ -386,6 +386,16 @@ async fn run_app(
                             eprintln!("Failed to jump to worktree: {}", e);
                         }
                     }
+                    crossterm::event::KeyCode::Char('x') => {
+                        if let Err(e) = app.cleanup_selected() {
+                            eprintln!("Failed to cleanup agent: {}", e);
+                        }
+                    }
+                    crossterm::event::KeyCode::Char('X') => {
+                        if let Err(e) = app.cleanup_all_offline() {
+                            eprintln!("Failed to cleanup agents: {}", e);
+                        }
+                    }
                     crossterm::event::KeyCode::Enter => {
                         if let Err(e) = app.jump_to_selected() {
                             eprintln!("Failed to jump to pane: {}", e);

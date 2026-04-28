@@ -439,6 +439,67 @@ impl App {
     pub fn diff_scroll_down(&mut self) {
         self.diff_scroll += 1;
     }
+
+    /// Clean up the selected agent: kill its pane (if still alive),
+    /// delete its signal file, and remove it from the tracked list.
+    /// Only works on Offline agents to prevent accidental kills.
+    pub fn cleanup_selected(&mut self) -> Result<()> {
+        if let Some(agent) = self.selected_agent() {
+            if agent.status != AgentStatus::Offline {
+                return Ok(()); // safety: only clean up offline agents
+            }
+            let pane_id = agent.pane_id.clone();
+
+            // Kill pane if it somehow still exists (orphaned)
+            if self.tmux.pane_exists(&pane_id) {
+                Tmux::kill_pane(&pane_id)?;
+            }
+
+            // Delete signal file
+            self.signal_watcher.remove_signal(&pane_id);
+
+            // Remove saved name from state
+            self.state.agents.remove(&pane_id);
+            self.state.save()?;
+
+            // Remove from agent list
+            self.agents.retain(|a| a.pane_id != pane_id);
+            if self.selection >= self.agents.len() && !self.agents.is_empty() {
+                self.selection = self.agents.len() - 1;
+            }
+        }
+        Ok(())
+    }
+
+    /// Clean up all offline agents at once.
+    /// Returns the number of agents cleaned up.
+    pub fn cleanup_all_offline(&mut self) -> Result<usize> {
+        let offline_ids: Vec<String> = self
+            .agents
+            .iter()
+            .filter(|a| a.status == AgentStatus::Offline)
+            .map(|a| a.pane_id.clone())
+            .collect();
+
+        let count = offline_ids.len();
+        for pane_id in &offline_ids {
+            if self.tmux.pane_exists(pane_id) {
+                let _ = Tmux::kill_pane(pane_id);
+            }
+            self.signal_watcher.remove_signal(pane_id);
+            self.state.agents.remove(pane_id);
+        }
+
+        if count > 0 {
+            self.state.save()?;
+            self.agents.retain(|a| a.status != AgentStatus::Offline);
+            if self.selection >= self.agents.len() && !self.agents.is_empty() {
+                self.selection = self.agents.len() - 1;
+            }
+        }
+
+        Ok(count)
+    }
 }
 
 impl Default for App {

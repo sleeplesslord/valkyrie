@@ -239,6 +239,15 @@ impl SignalWatcher {
             .and_then(|ts| DateTime::parse_from_rfc3339(ts).ok())
             .map(|dt| dt.with_timezone(&Utc))
     }
+
+    /// Remove a signal file from disk and from the in-memory map.
+    /// Returns true if the signal existed and was removed.
+    pub fn remove_signal(&mut self, pane_id: &str) -> bool {
+        let existed = self.signals.remove(pane_id).is_some();
+        let path = self.signal_dir.join(format!("{}.json", pane_id));
+        let _ = std::fs::remove_file(path); // ignore error if already gone
+        existed
+    }
 }
 
 impl Default for SignalWatcher {
