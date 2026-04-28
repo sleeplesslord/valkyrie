@@ -27,8 +27,13 @@ const SAGA_NEW_PATTERN = /\bsg\s+new\b/g;
 
 /// After the first regex match consumes "sg <cmd> <id>", any remaining IDs
 /// on the same line are bare tokens. This extracts them until a flag (--xx) or
-/// end of string.
-function extractSgIdsFromTail(text, firstMatchEnd) {
+/// end of string. Only valid for multi-ID commands (claim, done, unclaim, wontdo).
+/// Other commands like "log" have a message arg after the ID, which must NOT be
+/// treated as saga IDs.
+const MULTI_ID_COMMANDS = new Set(["claim", "done", "unclaim", "wontdo"]);
+
+function extractSgIdsFromTail(text, firstMatchEnd, subcmd) {
+  if (!MULTI_ID_COMMANDS.has(subcmd)) return [];
   const tail = text.slice(firstMatchEnd);
   const ids = [];
   for (const m of tail.matchAll(/\s+([\w.-]+)/g)) {
@@ -208,7 +213,7 @@ export default async function AgentSidebarPlugin(ctx) {
       found = true;
       debug("extractSagaIds:", subcmd, id);
       // Multi-ID commands (e.g. "sg claim abc def"): pick up trailing IDs
-      const tailIds = extractSgIdsFromTail(text, m.index + m[0].length);
+      const tailIds = extractSgIdsFromTail(text, m.index + m[0].length, subcmd);
       for (const tid of tailIds) {
         const tex = trackedSagas.get(tid);
         trackedSagas.set(tid, {
