@@ -6,6 +6,7 @@ import { promisify } from "util";
 
 const execAsync = promisify(exec);
 const SIGNAL_DIR = join(homedir(), ".valkyrie", "agents");
+const LOG_FILE = join(homedir(), ".valkyrie", "plugin.log");
 
 const TOOL_ACTIVITY = {
   read: "exploring",
@@ -65,7 +66,16 @@ function extractFilePath(tool, args) {
   }
 }
 
-async function fetchSagaInfo(sagaIds) {
+/// Debug logger — appends timestamped messages to ~/.valkyrie/plugin.log.
+/// Keep calls lightweight; this is a dev diagnostic tool.
+function debug(...args) {
+  const ts = new Date().toISOString().slice(11, 19);
+  const line = `[${ts}] ${args.join(" ")}\n`;
+  // Fire-and-forget write — never await or block the main path
+  import("fs/promises").then(fs => fs.appendFile(LOG_FILE, line).catch(() => {}));
+}
+
+async function fetchSagaInfo(sagaIds, trackedSagas) {
   const sagas = [];
   for (const id of sagaIds) {
     try {
@@ -83,7 +93,9 @@ async function fetchSagaInfo(sagaIds) {
           interaction: existing?.interaction || null,
         });
       }
-    } catch {}
+    } catch (e) {
+      debug("fetchSagaInfo failed for", id, ":", e?.message || e);
+    }
   }
   return sagas;
 }
@@ -167,7 +179,7 @@ export default async function AgentSidebarPlugin(ctx) {
     lastSagaRefresh = now;
     const ids = [...trackedSagas.keys()];
     if (ids.length === 0) return;
-    const sagas = await fetchSagaInfo(ids);
+    const sagas = await fetchSagaInfo(ids, trackedSagas);
     for (const s of sagas) {
       trackedSagas.set(s.id, s);
     }
@@ -194,6 +206,7 @@ export default async function AgentSidebarPlugin(ctx) {
         interaction: subcmd,
       });
       found = true;
+      debug("extractSagaIds:", subcmd, id);
       // Multi-ID commands (e.g. "sg claim abc def"): pick up trailing IDs
       const tailIds = extractSgIdsFromTail(text, m.index + m[0].length);
       for (const tid of tailIds) {
@@ -205,6 +218,7 @@ export default async function AgentSidebarPlugin(ctx) {
           claimed_by: tex?.claimed_by || null,
           interaction: subcmd, // same interaction for all IDs in multi-id command
         });
+        debug("extractSagaIds tail:", subcmd, tid);
       }
     }
     return found;
@@ -222,9 +236,50 @@ export default async function AgentSidebarPlugin(ctx) {
         claimed_by: existing?.claimed_by || null,
         interaction: "new",
       });
+      debug("extractSagaIdFromOutput: new", m[1]);
       return true;
     }
     return false;
+  }
+
+  /// Parse saga data directly from `sg context --format json` output
+  /// embedded in tool output, avoiding a redundant sg context round-trip.
+  function parseSagaFromToolOutput(toolOutput) {
+    if (!toolOutput || typeof toolOutput !== "string") return false;
+    let found = false;
+    try {
+      const data = JSON.parse(toolOutput);
+      if (data?.saga?.id) {
+        const existing = trackedSagas.get(data.saga.id);
+        trackedSagas.set(data.saga.id, {
+          id: data.saga.id,
+          title: data.saga.title || "",
+          status: data.saga.status || "unknown",
+          claimed_by: data.saga.claimed_by || null,
+          interaction: existing?.interaction || "context",
+        });
+        debug("parseSagaFromToolOutput:", data.saga.id);
+        found = true;
+      }
+    } catch {
+      // Not JSON — might be human-readable output or mixed. Fall through.
+    }
+    return found;
+  }
+
+  /// Extract the bash command string from tool args, handling
+  /// different argument structures across opencode versions.
+  function extractBashCommand(args) {
+    if (!args) return null;
+    // Standard structure: { command: "..." }
+    if (typeof args.command === "string") return args.command;
+    // Some versions nest under a different key
+    if (typeof args.cmd === "string") return args.cmd;
+    // Bash tool may pass command as the first positional arg
+    if (typeof args.input === "string") return args.input;
+    // Command might be in a script field
+    if (typeof args.script === "string") return args.script;
+    return null;
   }
 
   async function writeSignal(status) {
@@ -263,6 +318,7 @@ export default async function AgentSidebarPlugin(ctx) {
   process.on("SIGINT", cleanup);
 
   await writeSignal("idle");
+  debug("plugin initialized, pane:", paneId);
 
   const HEARTBEAT_INTERVAL = 15000;
   setInterval(() => writeSignal(), HEARTBEAT_INTERVAL);
@@ -368,17 +424,49 @@ export default async function AgentSidebarPlugin(ctx) {
           }
           break;
         }
+
+        // command.executed fires when opencode's internal command system
+        // runs a slash command or tool. This catches sg commands that might
+        // not go through the bash tool (e.g., when opencode routes sg as
+        // a first-class command rather than a shell invocation).
+        case "command.executed": {
+          const name = event.properties?.name;
+          const arguments = event.properties?.arguments;
+          debug("command.executed:", name, arguments?.slice(0, 100));
+          // If the command is "sg" or starts with "sg", extract saga IDs
+          const cmdText = [name, arguments].filter(Boolean).join(" ");
+          if (cmdText) {
+            const found = extractSagaIds(cmdText);
+            if (found) sagaRefreshNeeded = true;
+            // Also check for sg new output
+            SAGA_NEW_PATTERN.lastIndex = 0;
+            if (SAGA_NEW_PATTERN.test(cmdText)) {
+              sagaRefreshNeeded = true;
+            }
+          }
+          break;
+        }
       }
     },
 
     "tool.execute.before": async (input, output) => {
       currentTool = input.tool;
       currentActivity = TOOL_ACTIVITY[input.tool] || "thinking";
-      if (input.tool === "bash" && output.args?.command) {
-        lastBashCommand = output.args.command;
-        const found = extractSagaIds(output.args.command);
-        if (found) sagaRefreshNeeded = true;
+
+      if (input.tool === "bash") {
+        const cmd = extractBashCommand(output.args);
+        if (cmd) {
+          lastBashCommand = cmd;
+          debug("bash before:", cmd.slice(0, 120));
+          const found = extractSagaIds(cmd);
+          if (found) sagaRefreshNeeded = true;
+        } else {
+          // Log the actual arg structure so we can debug mismatches
+          debug("bash before: no command found, args keys:", Object.keys(output.args || {}).join(","));
+          debug("bash before: args sample:", JSON.stringify(output.args).slice(0, 200));
+        }
       }
+
       const filePath = extractFilePath(input.tool, output.args);
       if (filePath) {
         currentFile = filePath;
@@ -393,6 +481,7 @@ export default async function AgentSidebarPlugin(ctx) {
       // Use the command saved from the before hook.
       const cmd = input.tool === "bash" ? lastBashCommand : null;
       lastBashCommand = null;
+
       if (cmd) {
         const found = extractSagaIds(cmd);
         if (found) sagaRefreshNeeded = true;
@@ -404,6 +493,15 @@ export default async function AgentSidebarPlugin(ctx) {
           sagaRefreshNeeded = true;
         }
       }
+
+      // Try to parse saga data directly from bash tool output.
+      // When the agent runs `sg context <id> --format json`, the output
+      // is the saga JSON — parse it instead of making a redundant sg call.
+      if (input.tool === "bash" && output.output) {
+        const parsed = parseSagaFromToolOutput(output.output);
+        if (parsed) sagaRefreshNeeded = true;
+      }
+
       if (currentTool === input.tool) {
         currentTool = null;
       }
