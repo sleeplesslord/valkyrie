@@ -102,6 +102,7 @@ export default async function AgentSidebarPlugin(ctx) {
   let currentLabel = null;
   let currentSessionId = null;
   let lastBashCommand = null; // carried from before → after hook
+  let permissionPending = false; // true while waiting for user approval
   const trackedSagas = new Map();
   let sagaRefreshNeeded = false;
   let lastSagaRefresh = 0;
@@ -307,12 +308,14 @@ export default async function AgentSidebarPlugin(ctx) {
         }
           
         case "permission.asked":
+          permissionPending = true;
           currentActivity = "waiting";
           await writeSignal("waiting_input");
           break;
 
         case "permission.updated":
-          if (lastStatus === "waiting_input") {
+          if (permissionPending) {
+            permissionPending = false;
             currentActivity = currentTool ? (TOOL_ACTIVITY[currentTool] || "thinking") : "thinking";
             await writeSignal("running");
           }
@@ -378,8 +381,12 @@ export default async function AgentSidebarPlugin(ctx) {
       if (currentTool === input.tool) {
         currentTool = null;
       }
+      // Tool finished — permission is no longer pending (was auto-approved
+      // or just completed). Clear the flag and ensure we're not stuck
+      // in waiting_input.
+      permissionPending = false;
       currentActivity = currentTool ? (TOOL_ACTIVITY[currentTool] || "thinking") : "thinking";
-      await writeSignal();
+      await writeSignal("running");
     },
   };
 }
