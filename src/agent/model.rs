@@ -50,11 +50,11 @@ impl AgentStatus {
         let wave = wave_frame(tick_count);
         match self {
             AgentStatus::Running => match (activity, tool) {
-                (Some("coding"), Some(t)) => format!("{} ✎{}", wave, truncate_tool(t)),
-                (Some("exploring"), Some(t)) => format!("{} ◉{}", wave, truncate_tool(t)),
-                (Some("running"), Some(t)) => format!("{} ⟳{}", wave, truncate_tool(t)),
-                (Some("researching"), Some(_)) => format!("{} ◈web", wave),
-                (_, Some(t)) => format!("{} ◉{}", wave, truncate_tool(t)),
+                (Some("coding"), Some(t)) => format!("{} ✎ {}", wave, truncate_tool(t)),
+                (Some("exploring"), Some(t)) => format!("{} ◉ {}", wave, truncate_tool(t)),
+                (Some("running"), Some(t)) => format!("{} ⟳ {}", wave, truncate_tool(t)),
+                (Some("researching"), Some(_)) => format!("{} ◈ web", wave),
+                (_, Some(t)) => format!("{} ◉ {}", wave, truncate_tool(t)),
                 (Some("coding"), None) => format!("{} ✎", wave),
                 (Some("exploring"), None) => format!("{} ◉", wave),
                 (Some("running"), None) => format!("{} ⟳", wave),
