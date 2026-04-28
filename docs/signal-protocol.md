@@ -27,6 +27,10 @@ Signal files provide a cooperative communication channel between agents and the 
   "task": "Implementing authentication module",
   "working_dir": "/home/user/projects/auth-service",
   "last_update": "2026-04-15T18:30:00Z",
+  "sagas": [
+    {"id": "abc123", "title": "Implement auth", "status": "active", "claimed_by": "agent-1", "interaction": "claim"},
+    {"id": "def456", "title": "Add OAuth", "status": "active", "claimed_by": null, "interaction": "context"}
+  ],
   "metadata": {
     "model": "claude-3-opus",
     "tokens_used": 12543
@@ -54,6 +58,7 @@ Only required fields:
 | `task` | string | No | Human-readable task description |
 | `working_dir` | string | No | Current working directory |
 | `last_update` | string | Yes | ISO 8601 timestamp |
+| `sagas` | array | No | List of saga objects (see Saga Objects) |
 | `metadata` | object | No | Agent-specific additional data |
 
 ### Status Values
@@ -65,6 +70,47 @@ Only required fields:
 | `waiting_input` | Needs user input |
 | `error` | Encountered an error |
 | `completed` | Task finished |
+
+### Saga Objects
+
+Each saga in the `sagas` array has:
+
+```json
+{
+  "id": "abc123",
+  "title": "Implement auth",
+  "status": "active",
+  "claimed_by": "agent-1",
+  "interaction": "context"
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `id` | string | Yes | Saga identifier |
+| `title` | string | No | Human-readable saga title |
+| `status` | string | No | Saga status (active, paused, done, wontdo) |
+| `claimed_by` | string \| null | No | Agent that claimed the saga |
+| `interaction` | string \| null | No | Last sg subcommand used (see Interaction Values) |
+
+### Interaction Values
+
+The `interaction` field tracks what the agent last did with a saga, enabling the sidebar to display meaningful icons that distinguish "referenced as context" from "claimed for work" from "logged progress":
+
+| Value | Icon | Color | Description |
+|-------|------|-------|-------------|
+| `context` | ◫ | cyan | Read full context (reference lookup) |
+| `claim` | ◐ | yellow | Claimed for work |
+| `log` | ✎ | gray | Added a log entry |
+| `new` | ✦ | green | Created the saga |
+| `done` | ✓ | dark gray | Marked complete |
+| `edit` | ✎ | magenta | Edited title/description/priority |
+| `relate` | ◈ | cyan | Added a relationship link |
+| `depend` | ◈ | cyan | Added a dependency |
+| `unclaim` | ○ | yellow | Released claim |
+| `continue` | ▶ | green | Resumed a paused saga |
+| `reopen` | ↻ | yellow | Reopened a completed saga |
+| `wontdo` | ⊘ | dark gray | Marked won't-do |
 
 ## Agent Integration
 

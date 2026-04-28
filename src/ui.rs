@@ -223,24 +223,44 @@ fn render_agent_list(f: &mut Frame, app: &App, area: Rect) {
                     "wontdo" => ("⊘", Color::DarkGray),
                     _ => ("?", Color::DarkGray),
                 };
+
+                // Interaction icon: shows what sg command was last used on this saga
+                let (interaction_str, interaction_color) = match saga.interaction.as_deref() {
+                    Some("context") => ("◫", Color::Cyan),       // read/referenced
+                    Some("claim") => ("◐", Color::Yellow),        // claimed
+                    Some("log") => ("✎", Color::Gray),           // logged work
+                    Some("new") => ("✦", Color::Green),           // created
+                    Some("done") => ("✓", Color::DarkGray),      // completed
+                    Some("edit") => ("✎", Color::Magenta),       // edited
+                    Some("relate") | Some("depend") => ("◈", Color::Cyan), // linked
+                    Some("unclaim") => ("○", Color::Yellow),     // released
+                    Some("continue") => ("▶", Color::Green),    // resumed
+                    Some("reopen") => ("↻", Color::Yellow),      // reopened
+                    Some("wontdo") => ("⊘", Color::DarkGray),    // won't-do
+                    Some(_) => ("○", Color::DarkGray),           // other
+                    None => ("", Color::DarkGray),                // no interaction recorded
+                };
+
                 let saga_title_color = if saga.status.as_str() == "done" || saga.status.as_str() == "wontdo" {
                     Color::DarkGray
                 } else {
                     Color::Gray
                 };
-                let used = saga_indent.len() + saga_status_str.len() + 1;
+                let interaction_width = if interaction_str.is_empty() { 0 } else { interaction_str.chars().count() + 1 };
+                let used = saga_indent.len() + saga_status_str.len() + 1 + interaction_width;
                 let saga_title_max = width.saturating_sub(used);
                 let saga_title = truncate_str(&saga.title, saga_title_max);
                 let saga_style = |fg: Color| Style::default().fg(fg);
-                let saga_line = Line::from(vec![
+                let mut spans = vec![
                     Span::styled(saga_indent.to_string(), saga_style(Color::DarkGray)),
-                    Span::styled(
-                        saga_status_str.to_string(),
-                        saga_style(saga_status_color),
-                    ),
-                    Span::styled(" ".to_string(), saga_style(Color::DarkGray)),
-                    Span::styled(saga_title, saga_style(saga_title_color)),
-                ]);
+                    Span::styled(saga_status_str.to_string(), saga_style(saga_status_color)),
+                ];
+                if !interaction_str.is_empty() {
+                    spans.push(Span::styled(format!(" {}", interaction_str), saga_style(interaction_color)));
+                }
+                spans.push(Span::styled(" ".to_string(), saga_style(Color::DarkGray)));
+                spans.push(Span::styled(saga_title, saga_style(saga_title_color)));
+                let saga_line = Line::from(spans);
                 items.push(ListItem::new(saga_line));
             }
         }

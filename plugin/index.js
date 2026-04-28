@@ -18,9 +18,10 @@ const TOOL_ACTIVITY = {
 };
 
 // Matches sg subcommands that take a saga ID as the first arg.
+// Capture group 1 = subcommand, group 2 = saga ID.
 // For multi-ID commands like "sg claim abc123 def456", the global +while
 // loop will match the first ID, then extractSgIdsFromTail picks up the rest.
-const SAGA_ID_PATTERN = /\bsg\s+(?:claim|done|log|context|edit|label|priority|depend|relate|unclaim|continue|reopen|wontdo)\s+([\w.-]+)/g;
+const SAGA_ID_PATTERN = /\bsg\s+(claim|done|log|context|edit|label|priority|depend|relate|unclaim|continue|reopen|wontdo)\s+([\w.-]+)/g;
 const SAGA_NEW_PATTERN = /\bsg\s+new\b/g;
 
 /// After the first regex match consumes "sg <cmd> <id>", any remaining IDs
@@ -73,11 +74,13 @@ async function fetchSagaInfo(sagaIds) {
       );
       const data = JSON.parse(stdout);
       if (data && data.saga) {
+        const existing = trackedSagas.get(id);
         sagas.push({
           id: data.saga.id,
           title: data.saga.title || "",
           status: data.saga.status || "unknown",
           claimed_by: data.saga.claimed_by || null,
+          interaction: existing?.interaction || null,
         });
       }
     } catch {}
@@ -180,12 +183,28 @@ export default async function AgentSidebarPlugin(ctx) {
     let m;
     SAGA_ID_PATTERN.lastIndex = 0;
     while ((m = SAGA_ID_PATTERN.exec(text)) !== null) {
-      trackedSagas.set(m[1], { id: m[1], title: "", status: "unknown", claimed_by: null });
+      const subcmd = m[1];
+      const id = m[2];
+      const existing = trackedSagas.get(id);
+      trackedSagas.set(id, {
+        id,
+        title: existing?.title || "",
+        status: existing?.status || "unknown",
+        claimed_by: existing?.claimed_by || null,
+        interaction: subcmd,
+      });
       found = true;
       // Multi-ID commands (e.g. "sg claim abc def"): pick up trailing IDs
       const tailIds = extractSgIdsFromTail(text, m.index + m[0].length);
-      for (const id of tailIds) {
-        trackedSagas.set(id, { id, title: "", status: "unknown", claimed_by: null });
+      for (const tid of tailIds) {
+        const tex = trackedSagas.get(tid);
+        trackedSagas.set(tid, {
+          id: tid,
+          title: tex?.title || "",
+          status: tex?.status || "unknown",
+          claimed_by: tex?.claimed_by || null,
+          interaction: subcmd, // same interaction for all IDs in multi-id command
+        });
       }
     }
     return found;
@@ -195,7 +214,14 @@ export default async function AgentSidebarPlugin(ctx) {
     const idPattern = /(?:created|saga|Saga)\s+(?:saga\s+)?([a-z0-9]{5,}(?:\.\d+)?)/i;
     const m = text.match(idPattern);
     if (m) {
-      trackedSagas.set(m[1], { id: m[1], title: "", status: "unknown", claimed_by: null });
+      const existing = trackedSagas.get(m[1]);
+      trackedSagas.set(m[1], {
+        id: m[1],
+        title: existing?.title || "",
+        status: existing?.status || "unknown",
+        claimed_by: existing?.claimed_by || null,
+        interaction: "new",
+      });
       return true;
     }
     return false;

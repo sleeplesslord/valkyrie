@@ -18,6 +18,8 @@ pub struct SagaInfo {
     pub title: String,
     pub status: String,
     pub claimed_by: Option<String>,
+    /// Last sg subcommand used on this saga (context, claim, log, new, done, etc.)
+    pub interaction: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
