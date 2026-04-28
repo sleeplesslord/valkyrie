@@ -431,10 +431,10 @@ export default async function AgentSidebarPlugin(ctx) {
         // a first-class command rather than a shell invocation).
         case "command.executed": {
           const name = event.properties?.name;
-          const arguments = event.properties?.arguments;
-          debug("command.executed:", name, arguments?.slice(0, 100));
+          const args = event.properties?.arguments;
+          debug("command.executed:", name, args?.slice(0, 100));
           // If the command is "sg" or starts with "sg", extract saga IDs
-          const cmdText = [name, arguments].filter(Boolean).join(" ");
+          const cmdText = [name, args].filter(Boolean).join(" ");
           if (cmdText) {
             const found = extractSagaIds(cmdText);
             if (found) sagaRefreshNeeded = true;
