@@ -240,7 +240,13 @@ impl App {
                 }
             }
 
-            agent.last_activity = Utc::now();
+            // Use the signal's last_update timestamp so the UI can show
+            // accurate "time since last activity". Preserve the existing
+            // last_activity if the signal doesn't provide a timestamp
+            // (avoids resetting to "0s" every tick for signal-less agents).
+            if let Some(ts) = self.signal_watcher.get_last_update(&agent.pane_id) {
+                agent.last_activity = ts;
+            }
         }
     }
 

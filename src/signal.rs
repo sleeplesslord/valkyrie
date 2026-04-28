@@ -226,6 +226,17 @@ impl SignalWatcher {
             .filter(|s| !s.is_stale())
             .and_then(|s| s.current_file.clone())
     }
+
+    /// Returns the parsed `last_update` timestamp from the signal file.
+    /// Intentionally does NOT filter stale signals — we need the timestamp
+    /// even for stale agents so the UI can show correct "time since last activity".
+    pub fn get_last_update(&self, pane_id: &str) -> Option<DateTime<Utc>> {
+        self.signals
+            .get(pane_id)
+            .and_then(|s| s.last_update.as_deref())
+            .and_then(|ts| DateTime::parse_from_rfc3339(ts).ok())
+            .map(|dt| dt.with_timezone(&Utc))
+    }
 }
 
 impl Default for SignalWatcher {
