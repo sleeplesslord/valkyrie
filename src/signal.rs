@@ -164,11 +164,13 @@ impl SignalWatcher {
             .unwrap_or(AgentStatus::Unknown)
     }
 
+    /// Returns the agent_type from the signal file.
+    /// Intentionally does NOT filter stale signals — agent type is a stable
+    /// property (doesn't change with staleness). Without this, opencode agents
+    /// whose signals go stale become invisible because there's no tmux-based
+    /// opencode detector to fall back to.
     pub fn get_agent_type(&self, pane_id: &str) -> Option<String> {
-        self.signals
-            .get(pane_id)
-            .filter(|s| !s.is_stale())
-            .and_then(|s| s.agent_type.clone())
+        self.signals.get(pane_id).and_then(|s| s.agent_type.clone())
     }
 
     pub fn get_task(&self, pane_id: &str) -> Option<String> {
@@ -207,11 +209,11 @@ impl SignalWatcher {
             .and_then(|s| s.tool_executing.clone())
     }
 
+    /// Returns the session label from the signal file.
+    /// Intentionally does NOT filter stale signals — the label is a stable
+    /// property (the session title doesn't change when the agent goes idle).
     pub fn get_label(&self, pane_id: &str) -> Option<String> {
-        self.signals
-            .get(pane_id)
-            .filter(|s| !s.is_stale())
-            .and_then(|s| s.label.clone())
+        self.signals.get(pane_id).and_then(|s| s.label.clone())
     }
 
     pub fn get_sagas(&self, pane_id: &str) -> Vec<SagaInfo> {

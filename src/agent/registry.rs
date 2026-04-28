@@ -44,6 +44,7 @@ impl Default for AgentRegistry {
 pub fn create_default_registry() -> AgentRegistry {
     let mut registry = AgentRegistry::new();
     registry.register(super::claude::ClaudeDetector);
+    registry.register(super::claude::OpencodeDetector);
     registry
 }
 
@@ -72,9 +73,17 @@ mod tests {
     }
 
     #[test]
-    fn default_registry_does_not_detect_opencode_by_name() {
+    fn default_registry_detects_opencode_by_title() {
         let registry = create_default_registry();
         let pane = pane_with("zsh", "opencode");
+
+        assert_eq!(registry.detect(&pane), Some(AgentType::Opencode));
+    }
+
+    #[test]
+    fn default_registry_does_not_detect_opencode_by_plain_zsh() {
+        let registry = create_default_registry();
+        let pane = pane_with("zsh", "zsh");
 
         assert_eq!(registry.detect(&pane), None);
     }
