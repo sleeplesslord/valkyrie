@@ -108,6 +108,10 @@ pub struct Agent {
     pub last_activity: DateTime<Utc>,
     pub diff_stats: Option<DiffStats>,
     pub worktree: Option<String>,
+    /// Absolute path to the worktree, stored directly from the signal file
+    /// at the same time as the label. Used by jump_to_worktree() so the
+    /// jump always targets the same worktree that the displayed label came from.
+    pub worktree_abs: Option<String>,
     pub current_file: Option<String>,
     pub last_log: Option<String>,
     pub sagas: Vec<SagaInfo>,
@@ -136,6 +140,7 @@ impl Agent {
             last_activity: Utc::now(),
             diff_stats: None,
             worktree: None,
+            worktree_abs: None,
             current_file: None,
             last_log: None,
             sagas: Vec::new(),
