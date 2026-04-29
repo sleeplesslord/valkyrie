@@ -190,6 +190,16 @@ impl SignalWatcher {
             .and_then(|s| s.worktree.clone())
     }
 
+    /// Returns the worktree path from the signal file without the stale filter.
+    /// The worktree path is identity data — it's the directory the agent is
+    /// working in and persists across idle periods. Used by jump_to_worktree()
+    /// to avoid the fragile relative-path round-trip through the agent model.
+    pub fn get_worktree_path(&self, pane_id: &str) -> Option<String> {
+        self.signals
+            .get(pane_id)
+            .and_then(|s| s.worktree.clone())
+    }
+
     #[allow(dead_code)]
     pub fn get_working_dir(&self, pane_id: &str) -> Option<String> {
         self.signals

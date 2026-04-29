@@ -386,17 +386,15 @@ impl App {
 
     pub fn jump_to_worktree(&self) -> Result<()> {
         if let Some(agent) = self.selected_agent() {
-            let cwd = if let Some(wt_rel) = &agent.worktree {
-                // worktree may be a relative path (stripped from worktree_root)
-                if let Some(root) = self.worktree_cache.root() {
-                    root.join(wt_rel).to_string_lossy().to_string()
-                } else {
-                    // Absolute path or no root — use as-is
-                    wt_rel.clone()
-                }
-            } else {
-                agent.working_dir.clone()
-            };
+            // Use the signal file's worktree directly — it's an absolute path
+            // from `git rev-parse --show-toplevel`, set by the plugin. This
+            // avoids the fragile relative-path round-trip through agent.worktree
+            // + worktree_cache.root() which breaks when panes move and the
+            // agent model's worktree field gets resolved from the wrong signal.
+            let cwd = self
+                .signal_watcher
+                .get_worktree_path(&agent.pane_id)
+                .unwrap_or_else(|| agent.working_dir.clone());
             self.tmux.new_window_cwd("worktree", &cwd)?;
         }
         Ok(())
