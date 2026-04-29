@@ -126,6 +126,7 @@ export default async function AgentSidebarPlugin(ctx) {
   const trackedSagas = new Map();
   let sagaRefreshNeeded = false;
   let lastSagaRefresh = 0;
+  let lastLogMessage = null;
   const SAGA_REFRESH_INTERVAL = 10000;
 
   function extractSession(event) {
@@ -212,6 +213,28 @@ export default async function AgentSidebarPlugin(ctx) {
       });
       found = true;
       debug("extractSagaIds:", subcmd, id);
+      // Capture log message from sg log commands
+      if (subcmd === "log") {
+        let tail = text.slice(m.index + m[0].length).trim();
+        let msg = null;
+        if (tail.startsWith('"')) {
+          const end = tail.indexOf('"', 1);
+          msg = end > 0 ? tail.slice(1, end) : tail.slice(1);
+        } else if (tail.startsWith("'")) {
+          const end = tail.indexOf("'", 1);
+          msg = end > 0 ? tail.slice(1, end) : tail.slice(1);
+        } else if (tail && !tail.startsWith('-')) {
+          msg = tail;
+          for (const op of [" && ", " || ", "; ", " | ", "\n"]) {
+            const idx = msg.indexOf(op);
+            if (idx > 0) { msg = msg.slice(0, idx).trim(); break; }
+          }
+        }
+        if (msg) {
+          lastLogMessage = msg;
+          debug("extractLogMessage:", msg);
+        }
+      }
       // Multi-ID commands (e.g. "sg claim abc def"): pick up trailing IDs
       const tailIds = extractSgIdsFromTail(text, m.index + m[0].length, subcmd);
       for (const tid of tailIds) {
@@ -306,6 +329,7 @@ export default async function AgentSidebarPlugin(ctx) {
         current_file: currentFile,
         last_update: new Date().toISOString(),
         sagas: sagas.length > 0 ? sagas : undefined,
+        last_log: lastLogMessage || undefined,
       }, null, 2));
     } catch (err) {
       console.error("[valkyrie plugin] Failed to write signal:", err.message);

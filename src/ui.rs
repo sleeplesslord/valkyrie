@@ -143,8 +143,9 @@ fn render_agent_list(f: &mut Frame, app: &App, area: Rect) {
             let diff = agent.diff_stats.as_ref().map(|d| d.to_string());
             let has_diff = diff.as_deref().map(|d| !d.is_empty()).unwrap_or(false);
             let has_file = agent.current_file.as_deref().map(|f| !f.is_empty()).unwrap_or(false);
+            let has_log = agent.last_log.as_deref().map(|l| !l.is_empty()).unwrap_or(false);
 
-            if has_task || has_diff || has_file {
+            if has_task || has_diff || has_file || has_log {
                 let indent = if worktree.is_some() { "    " } else { "  " };
                 let sub_style = |fg: Color| Style::default().fg(fg);
 
@@ -208,6 +209,19 @@ fn render_agent_list(f: &mut Frame, app: &App, area: Rect) {
                         Span::styled(file_display, sub_style(Color::Gray)),
                     ]);
                     items.push(ListItem::new(file_line));
+                }
+
+                // --- Last log message line ---
+                if has_log {
+                    let log_msg = agent.last_log.as_deref().unwrap_or("");
+                    let log_max = width.saturating_sub(indent.len() + 2); // "⚑ " prefix
+                    let log_display = truncate_str(log_msg, log_max);
+                    let log_line = Line::from(vec![
+                        Span::styled(indent.to_string(), sub_style(Color::DarkGray)),
+                        Span::styled("⚑ ".to_string(), sub_style(Color::DarkGray)),
+                        Span::styled(log_display, sub_style(Color::Gray)),
+                    ]);
+                    items.push(ListItem::new(log_line));
                 }
             }
 

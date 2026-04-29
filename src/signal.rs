@@ -37,6 +37,7 @@ pub struct SignalFile {
     pub current_file: Option<String>,
     pub last_update: Option<String>,
     pub sagas: Option<Vec<SagaInfo>>,
+    pub last_log: Option<String>,
     pub metadata: Option<serde_json::Value>,
 }
 
@@ -235,6 +236,15 @@ impl SignalWatcher {
             .get(pane_id)
             .filter(|s| !s.is_stale())
             .and_then(|s| s.current_file.clone())
+    }
+
+    /// Returns the last sg log message from the signal file.
+    /// Intentionally does NOT filter stale signals — log messages
+    /// are display context that persists across idle periods.
+    pub fn get_last_log(&self, pane_id: &str) -> Option<String> {
+        self.signals
+            .get(pane_id)
+            .and_then(|s| s.last_log.clone())
     }
 
     /// Returns the parsed `last_update` timestamp from the signal file.

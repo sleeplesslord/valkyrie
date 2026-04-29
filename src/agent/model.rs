@@ -109,6 +109,7 @@ pub struct Agent {
     pub diff_stats: Option<DiffStats>,
     pub worktree: Option<String>,
     pub current_file: Option<String>,
+    pub last_log: Option<String>,
     pub sagas: Vec<SagaInfo>,
 }
 
@@ -136,6 +137,7 @@ impl Agent {
             diff_stats: None,
             worktree: None,
             current_file: None,
+            last_log: None,
             sagas: Vec::new(),
         }
     }

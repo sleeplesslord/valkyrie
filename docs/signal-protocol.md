@@ -59,6 +59,7 @@ Only required fields:
 | `working_dir` | string | No | Current working directory |
 | `last_update` | string | Yes | ISO 8601 timestamp |
 | `sagas` | array | No | List of saga objects (see Saga Objects) |
+| `last_log` | string | No | Last `sg log` message from the agent |
 | `metadata` | object | No | Agent-specific additional data |
 
 ### Status Values
