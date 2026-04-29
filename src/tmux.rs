@@ -193,6 +193,30 @@ impl Tmux {
         None
     }
 
+    /// Get the `session:window_id` for a pane by live-querying tmux.
+    /// This avoids using cached window_id/session_name which go stale
+    /// after panes move between windows.
+    pub fn get_pane_location(&self, pane_id: &str) -> Option<(String, String)> {
+        let output = Command::new("tmux")
+            .args([
+                "list-panes",
+                "-a",
+                "-F",
+                "#{pane_id}:#{session_name}:#{window_id}",
+            ])
+            .output()
+            .ok()?;
+
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        for line in stdout.lines() {
+            let parts: Vec<&str> = line.splitn(3, ':').collect();
+            if parts.len() == 3 && parts[0] == pane_id {
+                return Some((parts[1].to_string(), parts[2].to_string()));
+            }
+        }
+        None
+    }
+
     pub fn break_pane(&self, pane_id: &str, target_window: &str) -> Result<()> {
         let status = Command::new("tmux")
             .args(["break-pane", "-s", pane_id, "-t", target_window])

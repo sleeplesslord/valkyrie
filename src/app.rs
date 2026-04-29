@@ -418,10 +418,13 @@ impl App {
 
     pub fn jump_to_selected(&self) -> Result<()> {
         if let Some(agent) = self.selected_agent() {
-            // Use pane ID directly — tmux pane IDs are globally unique and
-            // modern tmux (3.2+) auto-switches to the correct window.
-            // The old two-step approach (select-window then select-pane)
-            // failed when cached window_id was stale after a pane move.
+            // Live-query the pane's current window/session instead of using
+            // the cached values on the Agent model, which go stale after
+            // panes move between windows (break-pane/join-pane).
+            if let Some((session, window_id)) = self.tmux.get_pane_location(&agent.pane_id) {
+                let window_target = format!("{}:{}", session, window_id);
+                self.tmux.select_window(&window_target)?;
+            }
             self.tmux.select_pane_by_id(&agent.pane_id)?;
         }
         Ok(())
