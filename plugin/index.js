@@ -34,7 +34,12 @@ const MULTI_ID_COMMANDS = new Set(["claim", "done", "unclaim", "wontdo"]);
 
 function extractSgIdsFromTail(text, firstMatchEnd, subcmd) {
   if (!MULTI_ID_COMMANDS.has(subcmd)) return [];
-  const tail = text.slice(firstMatchEnd);
+  let tail = text.slice(firstMatchEnd);
+  // Stop at shell operators — tokens beyond &&, ||, ;, | belong to separate commands
+  for (const op of [" && ", " || ", " ; ", " | "]) {
+    const idx = tail.indexOf(op);
+    if (idx >= 0) { tail = tail.slice(0, idx); break; }
+  }
   const ids = [];
   for (const m of tail.matchAll(/\s+([\w.-]+)/g)) {
     if (m[1].startsWith("-")) break; // flag, stop
