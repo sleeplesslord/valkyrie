@@ -321,6 +321,19 @@ impl App {
             self.agents
                 .retain(|a| a.status != AgentStatus::Offline || current_ids.contains(&a.pane_id));
 
+            // Clean up orphaned signal files — panes that no longer exist in tmux
+            // but still have signal files cluttering ~/.valkyrie/agents/. The plugin
+            // only cleans up on its own exit, so dead agents accumulate.
+            let orphaned: Vec<String> = self
+                .signal_watcher
+                .known_pane_ids()
+                .into_iter()
+                .filter(|id| !all_pane_ids.contains(id.as_str()))
+                .collect();
+            for pane_id in &orphaned {
+                self.signal_watcher.remove_signal(pane_id);
+            }
+
             if self.selection >= self.agents.len() && !self.agents.is_empty() {
                 self.selection = self.agents.len() - 1;
             }

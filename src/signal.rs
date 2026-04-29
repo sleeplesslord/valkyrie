@@ -266,6 +266,11 @@ impl SignalWatcher {
         let _ = std::fs::remove_file(path); // ignore error if already gone
         existed
     }
+
+    /// Returns all pane IDs that currently have signal files loaded.
+    pub fn known_pane_ids(&self) -> Vec<String> {
+        self.signals.keys().cloned().collect()
+    }
 }
 
 impl Default for SignalWatcher {
