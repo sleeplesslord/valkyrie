@@ -40,12 +40,25 @@ impl WorktreeCache {
     pub fn find_worktree(&self, working_dir: &str) -> Option<&WorktreeInfo> {
         let path = PathBuf::from(working_dir);
 
+        // Use longest-prefix match to prefer the most specific worktree.
+        // Without this, a working_dir of /project matches the root worktree
+        // (relative="") instead of /project/.worktrees/feature-auth.
+        let mut best: Option<(&PathBuf, &WorktreeInfo)> = None;
+
         for (wt_path, info) in &self.worktrees {
             if path.starts_with(wt_path) {
-                return Some(info);
+                let is_better = best
+                    .map(|(best_path, _)| {
+                        wt_path.components().count() > best_path.components().count()
+                    })
+                    .unwrap_or(true);
+                if is_better {
+                    best = Some((wt_path, info));
+                }
             }
         }
-        None
+
+        best.map(|(_, info)| info)
     }
 
     pub fn root(&self) -> Option<&Path> {
@@ -137,5 +150,43 @@ branch feature-auth
         assert_eq!(worktrees[0].relative, "");
         assert_eq!(worktrees[1].relative, ".worktrees/feature-auth");
         assert_eq!(worktrees[1].branch, Some("feature-auth".to_string()));
+    }
+
+    #[test]
+    fn test_find_worktree_longest_prefix_match() {
+        let mut cache = WorktreeCache::new();
+        cache.root = Some(PathBuf::from("/home/user/project"));
+        cache.worktrees = vec![
+            (
+                PathBuf::from("/home/user/project"),
+                WorktreeInfo {
+                    path: PathBuf::from("/home/user/project"),
+                    relative: String::new(),
+                    branch: Some("main".to_string()),
+                    head: Some("abc123".to_string()),
+                },
+            ),
+            (
+                PathBuf::from("/home/user/project/.worktrees/feature-auth"),
+                WorktreeInfo {
+                    path: PathBuf::from("/home/user/project/.worktrees/feature-auth"),
+                    relative: ".worktrees/feature-auth".to_string(),
+                    branch: Some("feature-auth".to_string()),
+                    head: Some("def456".to_string()),
+                },
+            ),
+        ]
+        .into_iter()
+        .collect();
+
+        // The project root itself matches only the root worktree (empty relative).
+        let root_match = cache.find_worktree("/home/user/project");
+        assert!(root_match.is_some());
+        assert_eq!(root_match.unwrap().relative, "");
+
+        // A path inside a specific worktree should match that worktree, not the root.
+        let feature_match = cache.find_worktree("/home/user/project/.worktrees/feature-auth/src");
+        assert!(feature_match.is_some());
+        assert_eq!(feature_match.unwrap().relative, ".worktrees/feature-auth");
     }
 }

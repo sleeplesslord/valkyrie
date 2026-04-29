@@ -146,8 +146,14 @@ impl App {
 
     fn update_worktrees(&mut self) {
         for agent in &mut self.agents {
-            if let Some(wt) = self.worktree_cache.find_worktree(&agent.working_dir) {
-                agent.worktree = Some(wt.relative.clone());
+            // Only resolve from working_dir if the signal didn't already set
+            // a worktree. Signals carry the authoritative worktree from the
+            // plugin; working_dir-based resolution can match the wrong worktree
+            // when panes move or the cwd is the project root.
+            if agent.worktree.is_none() {
+                if let Some(wt) = self.worktree_cache.find_worktree(&agent.working_dir) {
+                    agent.worktree = Some(wt.relative.clone());
+                }
             }
         }
     }
@@ -299,8 +305,14 @@ impl App {
                         existing.window_id = pane.window_id.clone();
                         // Also refresh working_dir from tmux if the signal
                         // doesn't provide one (belt-and-suspenders).
-                        if self.signal_watcher.get_worktree(&existing.pane_id).is_none()
-                            && self.signal_watcher.get_working_dir(&existing.pane_id).is_none()
+                        if self
+                            .signal_watcher
+                            .get_worktree(&existing.pane_id)
+                            .is_none()
+                            && self
+                                .signal_watcher
+                                .get_working_dir(&existing.pane_id)
+                                .is_none()
                         {
                             existing.working_dir = pane.current_path.clone();
                         }
