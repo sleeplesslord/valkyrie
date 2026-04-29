@@ -35,10 +35,12 @@ const MULTI_ID_COMMANDS = new Set(["claim", "done", "unclaim", "wontdo"]);
 function extractSgIdsFromTail(text, firstMatchEnd, subcmd) {
   if (!MULTI_ID_COMMANDS.has(subcmd)) return [];
   let tail = text.slice(firstMatchEnd);
-  // Stop at shell operators — tokens beyond &&, ||, ;, | belong to separate commands
-  for (const op of [" && ", " || ", " ; ", " | "]) {
-    const idx = tail.indexOf(op);
-    if (idx >= 0) { tail = tail.slice(0, idx); break; }
+  // Stop at shell operators (&&, ||, ;, |) or newlines — tokens beyond
+  // these belong to separate commands. Regex handles varied whitespace
+  // patterns: spaced " && ", unspaced "&&", newline "&&\n".
+  const opIdx = tail.search(/&&|\|\||;|\||\n/);
+  if (opIdx >= 0) {
+    tail = tail.slice(0, opIdx).trimEnd();
   }
   const ids = [];
   for (const m of tail.matchAll(/\s+([\w.-]+)/g)) {
@@ -230,10 +232,8 @@ export default async function AgentSidebarPlugin(ctx) {
           msg = end > 0 ? tail.slice(1, end) : tail.slice(1);
         } else if (tail && !tail.startsWith('-')) {
           msg = tail;
-          for (const op of [" && ", " || ", "; ", " | ", "\n"]) {
-            const idx = msg.indexOf(op);
-            if (idx > 0) { msg = msg.slice(0, idx).trim(); break; }
-          }
+          const opIdx = msg.search(/&&|\|\||;|\||\n/);
+          if (opIdx > 0) { msg = msg.slice(0, opIdx).trim(); }
         }
         if (msg) {
           lastLogMessage = msg;
@@ -491,7 +491,8 @@ export default async function AgentSidebarPlugin(ctx) {
         const cmd = extractBashCommand(output.args);
         if (cmd) {
           lastBashCommand = cmd;
-          debug("bash before:", cmd.slice(0, 120));
+          const hasChain = /[&|;]/.test(cmd);
+          debug("bash before:", cmd.slice(0, 120), hasChain ? "[chained]" : "");
           const found = extractSagaIds(cmd);
           if (found) sagaRefreshNeeded = true;
         } else {
