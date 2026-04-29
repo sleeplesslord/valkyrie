@@ -164,10 +164,14 @@ impl SignalWatcher {
             .unwrap_or(AgentStatus::Unknown)
     }
 
+    /// Returns the agent type from the signal file.
+    /// Intentionally does NOT filter stale signals — agent type is identity
+    /// data that persists across idle periods. Filtering stale causes
+    /// opencode agents to become invisible to discovery when the signal
+    /// hasn't been updated in >60s.
     pub fn get_agent_type(&self, pane_id: &str) -> Option<String> {
         self.signals
             .get(pane_id)
-            .filter(|s| !s.is_stale())
             .and_then(|s| s.agent_type.clone())
     }
 
@@ -207,10 +211,14 @@ impl SignalWatcher {
             .and_then(|s| s.tool_executing.clone())
     }
 
+    /// Returns the session label from the signal file.
+    /// Intentionally does NOT filter stale signals — labels are display
+    /// data that persist across idle periods. Filtering stale causes
+    /// agent names to revert to "zsh" when the signal hasn't been
+    /// updated in >60s.
     pub fn get_label(&self, pane_id: &str) -> Option<String> {
         self.signals
             .get(pane_id)
-            .filter(|s| !s.is_stale())
             .and_then(|s| s.label.clone())
     }
 

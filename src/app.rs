@@ -290,6 +290,19 @@ impl App {
                         self.agents.iter_mut().find(|a| a.pane_id == pane.pane_id)
                     {
                         existing.name = resolved_name;
+                        // Pane may have moved to a different window/session
+                        // (break-pane, join-pane, move-pane). Update location
+                        // data from the fresh PaneInfo so jump_to_selected()
+                        // and other tmux commands target the correct window.
+                        existing.session_name = pane.session_name.clone();
+                        existing.window_id = pane.window_id.clone();
+                        // Also refresh working_dir from tmux if the signal
+                        // doesn't provide one (belt-and-suspenders).
+                        if self.signal_watcher.get_worktree(&existing.pane_id).is_none()
+                            && self.signal_watcher.get_working_dir(&existing.pane_id).is_none()
+                        {
+                            existing.working_dir = pane.current_path.clone();
+                        }
                     }
                 }
             }
@@ -576,5 +589,37 @@ mod tests {
         let resolved = resolve_agent_name(&pane, None, None);
 
         assert_eq!(resolved, "OC");
+    }
+
+    #[test]
+    fn agent_location_updates_on_pane_move() {
+        // Simulate an agent created in window @0, then the pane moves
+        // to window @5 in session "other". The discover_panes() loop
+        // must update window_id and session_name so jump_to_selected()
+        // targets the correct window.
+        let original_pane = pane_with("%1", "opencode", "opencode");
+        let mut agent = Agent::from_pane(&original_pane, AgentType::Opencode);
+        assert_eq!(agent.window_id, "@0");
+        assert_eq!(agent.session_name, "main");
+
+        // Pane moved — same pane_id, different window/session
+        let moved_pane = PaneInfo {
+            session_name: "other".to_string(),
+            window_id: "@5".to_string(),
+            pane_id: "%1".to_string(),
+            pane_title: "opencode".to_string(),
+            current_command: "opencode".to_string(),
+            current_path: "/tmp".to_string(),
+            is_active: false,
+        };
+
+        // Simulate what discover_panes does for existing agents
+        agent.name = resolve_agent_name(&moved_pane, None, None);
+        agent.session_name = moved_pane.session_name.clone();
+        agent.window_id = moved_pane.window_id.clone();
+
+        assert_eq!(agent.window_id, "@5");
+        assert_eq!(agent.session_name, "other");
+        assert_eq!(agent.pane_id, "%1"); // pane_id is stable
     }
 }
