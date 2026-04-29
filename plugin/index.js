@@ -34,14 +34,7 @@ const MULTI_ID_COMMANDS = new Set(["claim", "done", "unclaim", "wontdo"]);
 
 function extractSgIdsFromTail(text, firstMatchEnd, subcmd) {
   if (!MULTI_ID_COMMANDS.has(subcmd)) return [];
-  let tail = text.slice(firstMatchEnd);
-  // Stop at shell operators (&&, ||, ;, |) or newlines — tokens beyond
-  // these belong to separate commands. Regex handles varied whitespace
-  // patterns: spaced " && ", unspaced "&&", newline "&&\n".
-  const opIdx = tail.search(/&&|\|\||;|\||\n/);
-  if (opIdx >= 0) {
-    tail = tail.slice(0, opIdx).trimEnd();
-  }
+  const tail = text.slice(firstMatchEnd);
   const ids = [];
   for (const m of tail.matchAll(/\s+([\w.-]+)/g)) {
     if (m[1].startsWith("-")) break; // flag, stop
@@ -203,55 +196,63 @@ export default async function AgentSidebarPlugin(ctx) {
     }
   }
 
+  /// Split a command string on shell operators (&&, ||, ;, |, newlines)
+  /// so each subcommand is parsed independently. This eliminates all
+  /// tail-bleed edge cases from chained commands like
+  /// "sg claim abc && sg context xyz".
+  function splitShellCommands(text) {
+    return text.split(/\s*(?:&&|\|\||[;|]|\n)\s*/).filter(Boolean);
+  }
+
   function extractSagaIds(text) {
     let found = false;
-    let m;
-    SAGA_ID_PATTERN.lastIndex = 0;
-    while ((m = SAGA_ID_PATTERN.exec(text)) !== null) {
-      const subcmd = m[1];
-      const id = m[2];
-      const existing = trackedSagas.get(id);
-      trackedSagas.set(id, {
-        id,
-        title: existing?.title || "",
-        status: existing?.status || "unknown",
-        claimed_by: existing?.claimed_by || null,
-        interaction: subcmd,
-      });
-      found = true;
-      debug("extractSagaIds:", subcmd, id);
-      // Capture log message from sg log commands
-      if (subcmd === "log") {
-        let tail = text.slice(m.index + m[0].length).trim();
-        let msg = null;
-        if (tail.startsWith('"')) {
-          const end = tail.indexOf('"', 1);
-          msg = end > 0 ? tail.slice(1, end) : tail.slice(1);
-        } else if (tail.startsWith("'")) {
-          const end = tail.indexOf("'", 1);
-          msg = end > 0 ? tail.slice(1, end) : tail.slice(1);
-        } else if (tail && !tail.startsWith('-')) {
-          msg = tail;
-          const opIdx = msg.search(/&&|\|\||;|\||\n/);
-          if (opIdx > 0) { msg = msg.slice(0, opIdx).trim(); }
-        }
-        if (msg) {
-          lastLogMessage = msg;
-          debug("extractLogMessage:", msg);
-        }
-      }
-      // Multi-ID commands (e.g. "sg claim abc def"): pick up trailing IDs
-      const tailIds = extractSgIdsFromTail(text, m.index + m[0].length, subcmd);
-      for (const tid of tailIds) {
-        const tex = trackedSagas.get(tid);
-        trackedSagas.set(tid, {
-          id: tid,
-          title: tex?.title || "",
-          status: tex?.status || "unknown",
-          claimed_by: tex?.claimed_by || null,
-          interaction: subcmd, // same interaction for all IDs in multi-id command
+    for (const segment of splitShellCommands(text)) {
+      let m;
+      SAGA_ID_PATTERN.lastIndex = 0;
+      while ((m = SAGA_ID_PATTERN.exec(segment)) !== null) {
+        const subcmd = m[1];
+        const id = m[2];
+        const existing = trackedSagas.get(id);
+        trackedSagas.set(id, {
+          id,
+          title: existing?.title || "",
+          status: existing?.status || "unknown",
+          claimed_by: existing?.claimed_by || null,
+          interaction: subcmd,
         });
-        debug("extractSagaIds tail:", subcmd, tid);
+        found = true;
+        debug("extractSagaIds:", subcmd, id);
+        // Capture log message from sg log commands
+        if (subcmd === "log") {
+          let tail = segment.slice(m.index + m[0].length).trim();
+          let msg = null;
+          if (tail.startsWith('"')) {
+            const end = tail.indexOf('"', 1);
+            msg = end > 0 ? tail.slice(1, end) : tail.slice(1);
+          } else if (tail.startsWith("'")) {
+            const end = tail.indexOf("'", 1);
+            msg = end > 0 ? tail.slice(1, end) : tail.slice(1);
+          } else if (tail && !tail.startsWith('-')) {
+            msg = tail;
+          }
+          if (msg) {
+            lastLogMessage = msg;
+            debug("extractLogMessage:", msg);
+          }
+        }
+        // Multi-ID commands (e.g. "sg claim abc def"): pick up trailing IDs
+        const tailIds = extractSgIdsFromTail(segment, m.index + m[0].length, subcmd);
+        for (const tid of tailIds) {
+          const tex = trackedSagas.get(tid);
+          trackedSagas.set(tid, {
+            id: tid,
+            title: tex?.title || "",
+            status: tex?.status || "unknown",
+            claimed_by: tex?.claimed_by || null,
+            interaction: subcmd, // same interaction for all IDs in multi-id command
+          });
+          debug("extractSagaIds tail:", subcmd, tid);
+        }
       }
     }
     return found;
