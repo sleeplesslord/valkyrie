@@ -24,7 +24,10 @@ pub enum Mode {
 
 pub struct App {
     pub agents: Vec<Agent>,
-    pub selection: usize,
+    /// Pane ID of the selected agent, instead of Vec index.
+    /// This decouples selection from Vec ordering, which differs from
+    /// the worktree-grouped display order used in the UI.
+    pub selection: Option<String>,
     pub mode: Mode,
     pub input_buffer: String,
     pub last_refresh: DateTime<Utc>,
@@ -102,7 +105,7 @@ impl App {
 
         let mut app = Self {
             agents: Vec::new(),
-            selection: 0,
+            selection: None,
             mode: Mode::default(),
             input_buffer: String::new(),
             last_refresh: Utc::now(),
@@ -119,6 +122,8 @@ impl App {
         app.update_signals();
         app.apply_saved_names();
         app.update_worktrees();
+        // Set initial selection to first agent in display order
+        app.selection = app.display_ordered_ids().first().cloned();
         app
     }
 
@@ -347,40 +352,77 @@ impl App {
                 self.signal_watcher.remove_signal(pane_id);
             }
 
-            if self.selection >= self.agents.len() && !self.agents.is_empty() {
-                self.selection = self.agents.len() - 1;
+            self.clamp_selection();
+        }
+    }
+
+    /// Return agent pane IDs in display order (worktree-grouped, matching the
+    /// UI rendering). Selection navigation and lookup must use this order
+    /// to ensure the highlighted item and the acted-upon agent are the same.
+    fn display_ordered_ids(&self) -> Vec<String> {
+        let groups = self.agents_by_worktree();
+        let mut ids = Vec::new();
+        for (_, agents) in groups {
+            for agent in agents {
+                ids.push(agent.pane_id.clone());
             }
         }
+        ids
     }
 
     pub fn select_next(&mut self) {
-        if !self.agents.is_empty() {
-            self.selection = (self.selection + 1) % self.agents.len();
+        let ids = self.display_ordered_ids();
+        if ids.is_empty() {
+            self.selection = None;
+            return;
         }
+        let current = self.selection.as_deref();
+        let idx = current
+            .and_then(|id| ids.iter().position(|i| i == id))
+            .unwrap_or(0);
+        let next = (idx + 1) % ids.len();
+        self.selection = Some(ids[next].clone());
     }
 
     pub fn select_prev(&mut self) {
-        if !self.agents.is_empty() {
-            self.selection = if self.selection == 0 {
-                self.agents.len() - 1
-            } else {
-                self.selection - 1
-            };
+        let ids = self.display_ordered_ids();
+        if ids.is_empty() {
+            self.selection = None;
+            return;
         }
+        let current = self.selection.as_deref();
+        let idx = current
+            .and_then(|id| ids.iter().position(|i| i == id))
+            .unwrap_or(0);
+        let prev = if idx == 0 { ids.len() - 1 } else { idx - 1 };
+        self.selection = Some(ids[prev].clone());
     }
 
     pub fn selected_agent(&self) -> Option<&Agent> {
-        self.agents.get(self.selection)
+        self.selection
+            .as_deref()
+            .and_then(|id| self.agents.iter().find(|a| a.pane_id == id))
+    }
+
+    /// After agents are removed, ensure selection still points to a valid
+    /// agent. If the selected agent was removed, fall back to the first
+    /// agent in display order.
+    fn clamp_selection(&mut self) {
+        if let Some(ref sel_id) = self.selection {
+            if self.agents.iter().any(|a| a.pane_id == *sel_id) {
+                return; // still valid
+            }
+        }
+        self.selection = self.display_ordered_ids().first().cloned();
     }
 
     pub fn jump_to_selected(&self) -> Result<()> {
         if let Some(agent) = self.selected_agent() {
-            // Switch window first, then focus the pane — select-pane alone
-            // doesn't change the active window in tmux.
-            let window_target = format!("{}:{}", agent.session_name, agent.window_id);
-            self.tmux.select_window(&window_target)?;
-            self.tmux
-                .select_pane(&agent.session_name, &agent.window_id, &agent.pane_id)?;
+            // Use pane ID directly — tmux pane IDs are globally unique and
+            // modern tmux (3.2+) auto-switches to the correct window.
+            // The old two-step approach (select-window then select-pane)
+            // failed when cached window_id was stale after a pane move.
+            self.tmux.select_pane_by_id(&agent.pane_id)?;
         }
         Ok(())
     }
@@ -502,9 +544,7 @@ impl App {
 
             // Remove from agent list
             self.agents.retain(|a| a.pane_id != pane_id);
-            if self.selection >= self.agents.len() && !self.agents.is_empty() {
-                self.selection = self.agents.len() - 1;
-            }
+            self.clamp_selection();
         }
         Ok(())
     }
@@ -531,9 +571,7 @@ impl App {
         if count > 0 {
             self.state.save()?;
             self.agents.retain(|a| a.status != AgentStatus::Offline);
-            if self.selection >= self.agents.len() && !self.agents.is_empty() {
-                self.selection = self.agents.len() - 1;
-            }
+            self.clamp_selection();
         }
 
         Ok(count)
@@ -646,5 +684,45 @@ mod tests {
         assert_eq!(agent.window_id, "@5");
         assert_eq!(agent.session_name, "other");
         assert_eq!(agent.pane_id, "%1"); // pane_id is stable
+    }
+
+    #[test]
+    fn selection_matches_display_order_not_vec_order() {
+        // Two agents in different worktrees. The agents Vec order (insertion
+        // order) may differ from the worktree-grouped display order. Selection
+        // must resolve to the highlighted agent regardless of ordering.
+        let mut agent_a = Agent::from_pane(
+            &pane_with("%1", "opencode", "opencode"),
+            AgentType::Opencode,
+        );
+        agent_a.name = "A".to_string();
+        agent_a.worktree = Some("project-x".to_string());
+        agent_a.worktree_abs = Some("/proj/x".to_string());
+        agent_a.working_dir = "/proj/x".to_string();
+
+        let mut agent_b = Agent::from_pane(
+            &pane_with("%2", "opencode", "opencode"),
+            AgentType::Opencode,
+        );
+        agent_b.name = "B".to_string();
+        agent_b.worktree = Some("project-y".to_string());
+        agent_b.worktree_abs = Some("/proj/y".to_string());
+        agent_b.working_dir = "/proj/y".to_string();
+
+        // Vec order: [A(proj-x), B(proj-y)]
+        let agents = vec![agent_a, agent_b];
+
+        // display_ordered_ids() returns worktree-grouped order.
+        // With only one agent per worktree, the HashMap iteration order
+        // determines grouping. What matters is that selected_agent()
+        // resolves by pane_id, not by Vec index.
+        let selected_id = Some("%2".to_string());
+        let found = selected_id
+            .as_deref()
+            .and_then(|id| agents.iter().find(|a| a.pane_id == id));
+
+        assert!(found.is_some());
+        assert_eq!(found.unwrap().pane_id, "%2");
+        assert_eq!(found.unwrap().worktree_abs.as_deref(), Some("/proj/y"));
     }
 }

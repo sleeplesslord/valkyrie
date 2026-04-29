@@ -1,4 +1,5 @@
 import { writeFile, mkdir, unlink } from "fs/promises";
+import { unlinkSync } from "fs";
 import { homedir } from "os";
 import { join, dirname } from "path";
 import { exec } from "child_process";
@@ -80,6 +81,64 @@ function debug(...args) {
   import("fs/promises").then(fs => fs.appendFile(LOG_FILE, line).catch(() => {}));
 }
 
+/// Resolve the actual tmux pane ID for this process.
+/// Fast path: verify stored paneId still exists in tmux.
+/// Slow path (pane gone): walk process tree to find our TTY, then
+/// match against tmux's pane_tty list.
+async function resolveActualPaneId() {
+  // Fast path: our stored paneId is still valid
+  try {
+    const { stdout } = await execAsync(
+      `tmux display-message -p -t ${paneId} '#{pane_id}' 2>/dev/null`
+    );
+    if (stdout.trim() === paneId) return paneId;
+  } catch {}
+
+  // Slow path: stored paneId is invalid — find our actual pane by TTY
+  try {
+    let pid = process.ppid;
+    for (let i = 0; i < 10 && pid > 1; i++) {
+      const { stdout: ttyOut } = await execAsync(`ps -o tty= -p ${pid} 2>/dev/null`);
+      const tty = ttyOut.trim();
+      if (tty && tty !== "?" && tty !== "??") {
+        const ttyPath = tty.startsWith("/") ? tty : `/dev/${tty}`;
+        const { stdout: panesOut } = await execAsync(
+          `tmux list-panes -a -F '#{pane_id} #{pane_tty}' 2>/dev/null`
+        );
+        for (const line of panesOut.trim().split("\n")) {
+          const [id, paneTty] = line.split(/\s+/);
+          if (paneTty === ttyPath) return id;
+        }
+        break;
+      }
+      const { stdout: ppidOut } = await execAsync(`ps -o ppid= -p ${pid} 2>/dev/null`);
+      pid = parseInt(ppidOut.trim());
+      if (isNaN(pid) || pid <= 1) break;
+    }
+  } catch {}
+
+  return null;
+}
+
+/// Check if our stored paneId matches tmux reality.
+/// If desynced, migrate the signal file to the correct pane.
+async function syncPaneId() {
+  const actual = await resolveActualPaneId();
+  if (!actual || actual === paneId) return;
+
+  debug("pane ID desync:", paneId, "→", actual, "— migrating signal file");
+
+  // Remove old signal file (points to dead/repurposed pane)
+  try { await unlink(signalPath); } catch {}
+
+  // Update to the actual current pane
+  paneId = actual;
+  signalPath = join(SIGNAL_DIR, `${paneId}.json`);
+
+  // Write to new path immediately so there's no gap
+  await writeSignal();
+}
+
 async function fetchSagaInfo(sagaIds, trackedSagas) {
   const sagas = [];
   for (const id of sagaIds) {
@@ -106,13 +165,13 @@ async function fetchSagaInfo(sagaIds, trackedSagas) {
 }
 
 export default async function AgentSidebarPlugin(ctx) {
-  const paneId = process.env.TMUX_PANE;
+  let paneId = process.env.TMUX_PANE;
   
   if (!paneId) {
     return {};
   }
 
-  const signalPath = join(SIGNAL_DIR, `${paneId}.json`);
+  let signalPath = join(SIGNAL_DIR, `${paneId}.json`);
   let currentFile = null;
   let currentWorktree = ctx.worktree || null;
   let lastStatus = "idle";
@@ -342,21 +401,23 @@ export default async function AgentSidebarPlugin(ctx) {
     }
   }
 
-  async function cleanup() {
-    try {
-      await unlink(signalPath);
-    } catch {}
+  /// Synchronous cleanup — must work in process.on("exit") which
+  /// doesn't await async callbacks. The old async cleanup() never
+  /// actually deleted signal files because the process exited first.
+  function cleanupSync() {
+    try { unlinkSync(signalPath); } catch {}
   }
 
-  process.on("exit", cleanup);
-  process.on("SIGTERM", cleanup);
-  process.on("SIGINT", cleanup);
+  process.on("exit", cleanupSync);
 
   await writeSignal("idle");
   debug("plugin initialized, pane:", paneId);
 
   const HEARTBEAT_INTERVAL = 15000;
-  setInterval(() => writeSignal(), HEARTBEAT_INTERVAL);
+  setInterval(async () => {
+    await syncPaneId();
+    await writeSignal();
+  }, HEARTBEAT_INTERVAL);
 
   return {
     async event({ event }) {

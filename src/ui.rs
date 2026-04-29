@@ -61,7 +61,6 @@ fn render_agent_list(f: &mut Frame, app: &App, area: Rect) {
     let width = area.width as usize;
     let groups = app.agents_by_worktree();
     let mut items: Vec<ListItem> = Vec::new();
-    let mut agent_index = 0;
 
     for (worktree, agents) in groups {
         if let Some(ref wt_name) = worktree {
@@ -77,16 +76,14 @@ fn render_agent_list(f: &mut Frame, app: &App, area: Rect) {
         for agent in agents {
             // Per-activity color for Running; distinct colors per status otherwise
             let status_color = match agent.status {
-                crate::agent::AgentStatus::Running => {
-                    match agent.activity.as_deref() {
-                        Some("coding") => Color::Rgb(80, 250, 123),
-                        Some("exploring") => Color::Rgb(0, 245, 255),
-                        Some("running") => Color::Rgb(241, 250, 140),
-                        Some("researching") => Color::Rgb(255, 121, 198),
-                        Some("thinking") => Color::White,
-                        _ => Color::Rgb(80, 250, 123),
-                    }
-                }
+                crate::agent::AgentStatus::Running => match agent.activity.as_deref() {
+                    Some("coding") => Color::Rgb(80, 250, 123),
+                    Some("exploring") => Color::Rgb(0, 245, 255),
+                    Some("running") => Color::Rgb(241, 250, 140),
+                    Some("researching") => Color::Rgb(255, 121, 198),
+                    Some("thinking") => Color::White,
+                    _ => Color::Rgb(80, 250, 123),
+                },
                 crate::agent::AgentStatus::Idle => Color::Rgb(150, 150, 150),
                 crate::agent::AgentStatus::WaitingInput => Color::Rgb(241, 250, 140),
                 crate::agent::AgentStatus::Error => Color::Rgb(255, 85, 85),
@@ -94,7 +91,7 @@ fn render_agent_list(f: &mut Frame, app: &App, area: Rect) {
                 crate::agent::AgentStatus::Unknown => Color::Blue,
             };
 
-            let is_selected = agent_index == app.selection;
+            let is_selected = Some(agent.pane_id.as_str()) == app.selection.as_deref();
 
             let name_color = match agent.agent_type {
                 crate::agent::AgentType::Opencode => Color::Cyan,
@@ -111,7 +108,8 @@ fn render_agent_list(f: &mut Frame, app: &App, area: Rect) {
 
             let pointer = if is_selected { "▸ " } else { "  " };
             let indicator_width = status_indicator.chars().count();
-            let name_max = width.saturating_sub(pointer.chars().count() + prefix.len() + indicator_width + 2);
+            let name_max =
+                width.saturating_sub(pointer.chars().count() + prefix.len() + indicator_width + 2);
             let name = truncate_str(&agent.name, name_max);
 
             let (indicator_style, name_style) = if is_selected {
@@ -128,10 +126,20 @@ fn render_agent_list(f: &mut Frame, app: &App, area: Rect) {
 
             let rel_time = format_relative_time(&agent.last_activity);
             let line1 = Line::from(vec![
-                Span::styled(format!("{}{}", prefix, pointer), Style::default().fg(if is_selected { status_color } else { Color::DarkGray })),
+                Span::styled(
+                    format!("{}{}", prefix, pointer),
+                    Style::default().fg(if is_selected {
+                        status_color
+                    } else {
+                        Color::DarkGray
+                    }),
+                ),
                 Span::styled(format!("{} ", status_indicator), indicator_style),
                 Span::styled(name, name_style),
-                Span::styled(format!(" {}", rel_time), Style::default().fg(Color::DarkGray)),
+                Span::styled(
+                    format!(" {}", rel_time),
+                    Style::default().fg(Color::DarkGray),
+                ),
             ]);
             items.push(ListItem::new(line1));
 
@@ -142,8 +150,16 @@ fn render_agent_list(f: &mut Frame, app: &App, area: Rect) {
                 .unwrap_or(false);
             let diff = agent.diff_stats.as_ref().map(|d| d.to_string());
             let has_diff = diff.as_deref().map(|d| !d.is_empty()).unwrap_or(false);
-            let has_file = agent.current_file.as_deref().map(|f| !f.is_empty()).unwrap_or(false);
-            let has_log = agent.last_log.as_deref().map(|l| !l.is_empty()).unwrap_or(false);
+            let has_file = agent
+                .current_file
+                .as_deref()
+                .map(|f| !f.is_empty())
+                .unwrap_or(false);
+            let has_log = agent
+                .last_log
+                .as_deref()
+                .map(|l| !l.is_empty())
+                .unwrap_or(false);
 
             if has_task || has_diff || has_file || has_log {
                 let indent = if worktree.is_some() { "    " } else { "  " };
@@ -151,10 +167,15 @@ fn render_agent_list(f: &mut Frame, app: &App, area: Rect) {
 
                 // --- Task + diff line ---
                 if has_task || has_diff {
-                    let mut spans: Vec<Span> = vec![Span::styled(indent.to_string(), sub_style(Color::DarkGray))];
+                    let mut spans: Vec<Span> =
+                        vec![Span::styled(indent.to_string(), sub_style(Color::DarkGray))];
 
                     // Compute diff display parts and their width
-                    let files_changed = agent.diff_stats.as_ref().map(|d| d.files_changed).unwrap_or(0);
+                    let files_changed = agent
+                        .diff_stats
+                        .as_ref()
+                        .map(|d| d.files_changed)
+                        .unwrap_or(0);
                     let (additions, deletions) = if has_diff {
                         let diff_str = diff.as_deref().unwrap_or("");
                         parse_diff_stats(diff_str)
@@ -173,7 +194,10 @@ fn render_agent_list(f: &mut Frame, app: &App, area: Rect) {
                     if !deletions.is_empty() {
                         diff_parts.push((format!("-{}", deletions), Color::Red));
                     }
-                    let diff_display_len: usize = diff_parts.iter().map(|(s, _)| s.chars().count()).sum::<usize>()
+                    let diff_display_len: usize = diff_parts
+                        .iter()
+                        .map(|(s, _)| s.chars().count())
+                        .sum::<usize>()
                         + diff_parts.len().saturating_sub(1); // spaces between parts
 
                     if has_task {
@@ -225,12 +249,12 @@ fn render_agent_list(f: &mut Frame, app: &App, area: Rect) {
                 }
             }
 
-            agent_index += 1;
-
             for saga in agent.sagas.iter().take(5) {
                 let saga_indent = if worktree.is_some() { "      " } else { "    " };
                 let (saga_status_str, saga_status_color) = match saga.status.as_str() {
-                    "active" if saga.claimed_by.as_deref().map_or(false, |c| !c.is_empty()) => ("◐", Color::Yellow),
+                    "active" if saga.claimed_by.as_deref().map_or(false, |c| !c.is_empty()) => {
+                        ("◐", Color::Yellow)
+                    }
                     "active" => ("●", Color::Green),
                     "paused" => ("◷", Color::Yellow),
                     "done" => ("✓", Color::DarkGray),
@@ -240,27 +264,32 @@ fn render_agent_list(f: &mut Frame, app: &App, area: Rect) {
 
                 // Interaction icon: shows what sg command was last used on this saga
                 let (interaction_str, interaction_color) = match saga.interaction.as_deref() {
-                    Some("context") => ("◫", Color::Cyan),       // read/referenced
-                    Some("claim") => ("◐", Color::Yellow),        // claimed
-                    Some("log") => ("✎", Color::Gray),           // logged work
-                    Some("new") => ("✦", Color::Green),           // created
-                    Some("done") => ("✓", Color::DarkGray),      // completed
-                    Some("edit") => ("✎", Color::Magenta),       // edited
+                    Some("context") => ("◫", Color::Cyan),  // read/referenced
+                    Some("claim") => ("◐", Color::Yellow),  // claimed
+                    Some("log") => ("✎", Color::Gray),      // logged work
+                    Some("new") => ("✦", Color::Green),     // created
+                    Some("done") => ("✓", Color::DarkGray), // completed
+                    Some("edit") => ("✎", Color::Magenta),  // edited
                     Some("relate") | Some("depend") => ("◈", Color::Cyan), // linked
-                    Some("unclaim") => ("○", Color::Yellow),     // released
-                    Some("continue") => ("▶", Color::Green),    // resumed
-                    Some("reopen") => ("↻", Color::Yellow),      // reopened
-                    Some("wontdo") => ("⊘", Color::DarkGray),    // won't-do
-                    Some(_) => ("○", Color::DarkGray),           // other
-                    None => ("", Color::DarkGray),                // no interaction recorded
+                    Some("unclaim") => ("○", Color::Yellow), // released
+                    Some("continue") => ("▶", Color::Green), // resumed
+                    Some("reopen") => ("↻", Color::Yellow), // reopened
+                    Some("wontdo") => ("⊘", Color::DarkGray), // won't-do
+                    Some(_) => ("○", Color::DarkGray),      // other
+                    None => ("", Color::DarkGray),          // no interaction recorded
                 };
 
-                let saga_title_color = if saga.status.as_str() == "done" || saga.status.as_str() == "wontdo" {
-                    Color::DarkGray
+                let saga_title_color =
+                    if saga.status.as_str() == "done" || saga.status.as_str() == "wontdo" {
+                        Color::DarkGray
+                    } else {
+                        Color::Gray
+                    };
+                let interaction_width = if interaction_str.is_empty() {
+                    0
                 } else {
-                    Color::Gray
+                    interaction_str.chars().count() + 1
                 };
-                let interaction_width = if interaction_str.is_empty() { 0 } else { interaction_str.chars().count() + 1 };
                 let used = saga_indent.len() + saga_status_str.len() + 1 + interaction_width;
                 let saga_title_max = width.saturating_sub(used);
                 let saga_title = truncate_str(&saga.title, saga_title_max);
@@ -270,7 +299,10 @@ fn render_agent_list(f: &mut Frame, app: &App, area: Rect) {
                     Span::styled(saga_status_str.to_string(), saga_style(saga_status_color)),
                 ];
                 if !interaction_str.is_empty() {
-                    spans.push(Span::styled(format!(" {}", interaction_str), saga_style(interaction_color)));
+                    spans.push(Span::styled(
+                        format!(" {}", interaction_str),
+                        saga_style(interaction_color),
+                    ));
                 }
                 spans.push(Span::styled(" ".to_string(), saga_style(Color::DarkGray)));
                 spans.push(Span::styled(saga_title, saga_style(saga_title_color)));

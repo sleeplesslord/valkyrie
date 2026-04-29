@@ -103,6 +103,22 @@ impl Tmux {
         Ok(())
     }
 
+    /// Select a pane by its unique pane ID (e.g. "%3").
+    /// Tmux pane IDs are globally unique across all sessions and windows.
+    /// Modern tmux (3.2+) automatically switches to the correct window
+    /// when selecting a pane by ID, making this more reliable than the
+    /// two-step select-window + select-pane approach with cached locations.
+    pub fn select_pane_by_id(&self, pane_id: &str) -> Result<()> {
+        let status = Command::new("tmux")
+            .args(["select-pane", "-t", pane_id])
+            .status()?;
+
+        if !status.success() {
+            anyhow::bail!("Failed to select pane {}", pane_id);
+        }
+        Ok(())
+    }
+
     pub fn rename_pane(&self, pane_id: &str, title: &str) -> Result<()> {
         let status = Command::new("tmux")
             .args(["select-pane", "-t", pane_id, "-T", title])

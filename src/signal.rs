@@ -171,9 +171,7 @@ impl SignalWatcher {
     /// opencode agents to become invisible to discovery when the signal
     /// hasn't been updated in >60s.
     pub fn get_agent_type(&self, pane_id: &str) -> Option<String> {
-        self.signals
-            .get(pane_id)
-            .and_then(|s| s.agent_type.clone())
+        self.signals.get(pane_id).and_then(|s| s.agent_type.clone())
     }
 
     pub fn get_task(&self, pane_id: &str) -> Option<String> {
@@ -218,9 +216,7 @@ impl SignalWatcher {
     /// agent names to revert to "zsh" when the signal hasn't been
     /// updated in >60s.
     pub fn get_label(&self, pane_id: &str) -> Option<String> {
-        self.signals
-            .get(pane_id)
-            .and_then(|s| s.label.clone())
+        self.signals.get(pane_id).and_then(|s| s.label.clone())
     }
 
     pub fn get_sagas(&self, pane_id: &str) -> Vec<SagaInfo> {
@@ -242,9 +238,7 @@ impl SignalWatcher {
     /// Intentionally does NOT filter stale signals — log messages
     /// are display context that persists across idle periods.
     pub fn get_last_log(&self, pane_id: &str) -> Option<String> {
-        self.signals
-            .get(pane_id)
-            .and_then(|s| s.last_log.clone())
+        self.signals.get(pane_id).and_then(|s| s.last_log.clone())
     }
 
     /// Returns the parsed `last_update` timestamp from the signal file.
