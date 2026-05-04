@@ -65,13 +65,20 @@ enum Commands {
 
 #[derive(Subcommand, Debug)]
 enum ConfigCommands {
-    #[command(about = "Set worktree root directory for grouping")]
-    SetWorktreeRoot {
-        #[arg(help = "Path to the worktree root directory")]
+    #[command(about = "Add a path prefix to strip from worktree display labels")]
+    AddTrimPath {
+        #[arg(help = "Directory path to trim from worktree labels")]
         path: String,
     },
-    #[command(about = "Clear worktree root configuration")]
-    ClearWorktreeRoot,
+    #[command(about = "Remove a trim path")]
+    RemoveTrimPath {
+        #[arg(help = "Directory path to remove from trim list")]
+        path: String,
+    },
+    #[command(about = "List configured trim paths")]
+    ListTrimPaths,
+    #[command(about = "Clear all trim paths (show full absolute paths)")]
+    ClearTrimPaths,
     #[command(about = "Set sidebar width in columns")]
     SetSidebarWidth {
         #[arg(
@@ -126,33 +133,66 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
+fn expand_path(path: &str) -> String {
+    if path.starts_with('~') {
+        if let Some(home) = dirs::home_dir() {
+            return path.replacen('~', &home.to_string_lossy(), 1);
+        }
+    }
+    path.to_string()
+}
+
+fn canonicalize_path(path: &str) -> Result<String> {
+    let expanded = expand_path(path);
+    let abs_path = std::fs::canonicalize(&expanded)?;
+    Ok(abs_path.to_string_lossy().to_string())
+}
+
 fn handle_config_command(command: ConfigCommands) -> Result<()> {
     match command {
-        ConfigCommands::SetWorktreeRoot { path } => {
-            let expanded = if path.starts_with('~') {
-                if let Some(home) = dirs::home_dir() {
-                    path.replacen('~', &home.to_string_lossy(), 1)
-                } else {
-                    path.clone()
-                }
+        ConfigCommands::AddTrimPath { path } => {
+            let abs_path = canonicalize_path(&path)?;
+
+            let mut config = Config::load().unwrap_or_default();
+            if !config.trim_paths.contains(&abs_path) {
+                config.trim_paths.push(abs_path.clone());
+                config.save()?;
+                println!("Added trim path: {}", abs_path);
             } else {
-                path.clone()
-            };
-
-            let abs_path = std::fs::canonicalize(&expanded)?;
-
-            let mut config = Config::load().unwrap_or_default();
-            config.worktree_root = Some(abs_path.to_string_lossy().to_string());
-            config.save()?;
-
-            println!("Worktree root set to: {}", abs_path.display());
+                println!("Trim path already configured: {}", abs_path);
+            }
         }
-        ConfigCommands::ClearWorktreeRoot => {
+        ConfigCommands::RemoveTrimPath { path } => {
+            let abs_path = canonicalize_path(&path)?;
+
             let mut config = Config::load().unwrap_or_default();
-            config.worktree_root = None;
+            let before = config.trim_paths.len();
+            config.trim_paths.retain(|p| p != &abs_path);
+            if config.trim_paths.len() < before {
+                config.save()?;
+                println!("Removed trim path: {}", abs_path);
+            } else {
+                println!("Trim path not found: {}", abs_path);
+            }
+        }
+        ConfigCommands::ListTrimPaths => {
+            let config = Config::load().unwrap_or_default();
+            if config.trim_paths.is_empty() {
+                println!("No trim paths configured.");
+                println!("Worktree labels will show full absolute paths.");
+            } else {
+                println!("Trim paths:");
+                for path in &config.trim_paths {
+                    println!("  {}", path);
+                }
+            }
+        }
+        ConfigCommands::ClearTrimPaths => {
+            let mut config = Config::load().unwrap_or_default();
+            config.trim_paths.clear();
             config.save()?;
 
-            println!("Worktree root cleared.");
+            println!("All trim paths cleared. Worktree labels will show full absolute paths.");
         }
         ConfigCommands::SetSidebarWidth { width } => {
             let mut config = Config::load().unwrap_or_default();
@@ -180,9 +220,13 @@ fn handle_config_command(command: ConfigCommands) -> Result<()> {
             let effective_sidebar_width = config.sidebar_width();
 
             println!("Current configuration:");
-            match &config.worktree_root {
-                Some(root) => println!("  worktree_root: {}", root),
-                None => println!("  worktree_root: (not set)"),
+            if config.trim_paths.is_empty() {
+                println!("  trim_paths: (none — full absolute paths shown)");
+            } else {
+                println!("  trim_paths:");
+                for path in &config.trim_paths {
+                    println!("    {}", path);
+                }
             }
             match config.sidebar_width {
                 Some(width) if width > 0 => println!("  sidebar_width: {}", width),

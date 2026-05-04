@@ -8,6 +8,7 @@ use crate::worktree::WorktreeCache;
 use anyhow::Result;
 use chrono::{DateTime, Utc};
 use std::collections::HashMap;
+use std::path::PathBuf;
 
 #[derive(Debug, Clone, Default)]
 pub enum Mode {
@@ -39,6 +40,10 @@ pub struct App {
     state: AppState,
     _config: Config,
     worktree_cache: WorktreeCache,
+    /// Paths to strip from worktree display labels.
+    /// E.g. `/home/user/project` → shows `.worktrees/feat` instead of
+    /// `/home/user/project/.worktrees/feat`. Multiple roots supported.
+    trim_paths: Vec<PathBuf>,
 }
 
 const PANE_DISCOVERY_INTERVAL: u64 = 20;
@@ -98,9 +103,13 @@ impl App {
         let state = AppState::load().unwrap_or_default();
         let config = Config::load().unwrap_or_default();
 
+        let trim_paths = config.trim_paths();
+
+        // Populate the worktree cache from the same roots used for trimming.
+        // Each trim path is a project root where we can discover git worktrees.
         let mut worktree_cache = WorktreeCache::new();
-        if let Some(root) = config.worktree_root() {
-            worktree_cache.set_root(root);
+        if !trim_paths.is_empty() {
+            worktree_cache.set_roots(trim_paths.clone());
         }
 
         let mut app = Self {
@@ -117,6 +126,7 @@ impl App {
             state,
             _config: config,
             worktree_cache,
+            trim_paths,
         };
         app.discover_panes();
         app.update_signals();
@@ -149,40 +159,63 @@ impl App {
         }
     }
 
+    /// Resolve worktrees for agents that didn't get one from their signal file.
+    /// Uses the WorktreeCache (populated from trim_paths / project roots)
+    /// to map working_dir → containing git worktree.
     fn update_worktrees(&mut self) {
+        let trim_paths = self.trim_paths.clone();
         for agent in &mut self.agents {
-            // Only resolve from working_dir if the signal didn't already set
-            // a worktree. Signals carry the authoritative worktree from the
-            // plugin; working_dir-based resolution can match the wrong worktree
-            // when panes move or the cwd is the project root.
-            if agent.worktree.is_none() {
+            // Only resolve if the signal didn't provide an authoritative
+            // worktree. The signal's worktree field (set via plugin) takes
+            // precedence over working_dir-based resolution, which can match
+            // the wrong worktree when panes move or the cwd is the project root.
+            if agent.worktree_abs.is_none() {
                 if let Some(wt) = self.worktree_cache.find_worktree(&agent.working_dir) {
-                    agent.worktree = Some(wt.relative.clone());
+                    agent.worktree_abs = Some(wt.path.to_string_lossy().to_string());
+                    agent.worktree = Some(trim_display_path(
+                        &wt.path.to_string_lossy(),
+                        &trim_paths,
+                    ));
                 }
             }
         }
     }
 
+    /// Group agents by their absolute worktree path for display.
+    ///
+    /// Returns `(display_label, agents)` pairs. The display label is
+    /// the trimmed version of the absolute path (see `trim_display_path`).
+    /// Grouping uses `worktree_abs` as the key so agents with the same
+    /// absolute worktree always appear together, regardless of trim config.
+    /// Agents with no worktree info (`worktree_abs = None`) are ungrouped.
     pub fn agents_by_worktree(&self) -> Vec<(Option<String>, Vec<&Agent>)> {
+        // Group by worktree_abs (identity key), not worktree (display label)
         let mut groups: HashMap<Option<String>, Vec<&Agent>> = HashMap::new();
-
         for agent in &self.agents {
             groups
-                .entry(agent.worktree.clone())
+                .entry(agent.worktree_abs.clone())
                 .or_default()
                 .push(agent);
         }
 
         let mut result: Vec<(Option<String>, Vec<&Agent>)> = groups.into_iter().collect();
 
+        // Sort: ungrouped (None) last, then by absolute path
         result.sort_by(|a, b| match (&a.0, &b.0) {
             (Some(_), None) => std::cmp::Ordering::Less,
             (None, Some(_)) => std::cmp::Ordering::Greater,
-            (Some(a_name), Some(b_name)) => a_name.cmp(b_name),
+            (Some(a_path), Some(b_path)) => a_path.cmp(b_path),
             (None, None) => std::cmp::Ordering::Equal,
         });
 
+        // Convert absolute paths to display labels
         result
+            .into_iter()
+            .map(|(abs, agents)| {
+                let display = abs.map(|p| trim_display_path(&p, &self.trim_paths));
+                (display, agents)
+            })
+            .collect()
     }
 
     fn update_git_diffs(&mut self) {
@@ -204,6 +237,7 @@ impl App {
     }
 
     fn update_signals(&mut self) {
+        let trim_paths = self.trim_paths.clone();
         for agent in &mut self.agents {
             let status = self.signal_watcher.get_status(&agent.pane_id);
             if status != AgentStatus::Unknown {
@@ -242,15 +276,9 @@ impl App {
             if let Some(dir) = &signal_dir {
                 agent.working_dir = dir.clone();
                 agent.worktree_abs = Some(dir.clone());
-                if let Some(root) = self.worktree_cache.root() {
-                    let wt_path = std::path::PathBuf::from(dir);
-                    if let Ok(relative) = wt_path.strip_prefix(root) {
-                        let rel = relative.to_string_lossy().to_string();
-                        agent.worktree = if rel.is_empty() { None } else { Some(rel) };
-                    } else {
-                        agent.worktree = Some(dir.clone());
-                    }
-                }
+                // Always compute the display label from the absolute path
+                // and configured trim paths.
+                agent.worktree = Some(trim_display_path(dir, &trim_paths));
             }
 
             // Use the signal's last_update timestamp so the UI can show
@@ -587,6 +615,26 @@ impl Default for App {
     }
 }
 
+/// Compute the display label for a worktree absolute path.
+///
+/// Tries each trim path as a prefix. If one matches, returns the
+/// relative suffix (e.g. `.worktrees/feature-auth`). If the path
+/// IS the trim path itself (project root), returns empty string
+/// (rendered as "◆ (root)"). If no trim path matches, returns
+/// the full absolute path so out-of-project worktrees are still
+/// identifiable.
+fn trim_display_path(abs_path: &str, trim_paths: &[PathBuf]) -> String {
+    let p = PathBuf::from(abs_path);
+    for trim in trim_paths {
+        if let Ok(relative) = p.strip_prefix(trim) {
+            let rel = relative.to_string_lossy().to_string();
+            return rel; // empty string = project root worktree
+        }
+    }
+    // No trim path matched — show the full absolute path
+    abs_path.to_string()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -727,5 +775,88 @@ mod tests {
         assert!(found.is_some());
         assert_eq!(found.unwrap().pane_id, "%2");
         assert_eq!(found.unwrap().worktree_abs.as_deref(), Some("/proj/y"));
+    }
+
+    #[test]
+    fn trim_display_path_strips_configured_prefix() {
+        let trim_paths = vec![PathBuf::from("/home/user/project")];
+
+        // Subdirectory → relative suffix
+        assert_eq!(
+            trim_display_path("/home/user/project/.worktrees/feat", &trim_paths),
+            ".worktrees/feat"
+        );
+        // Root itself → empty string (rendered as "◆ (root)")
+        assert_eq!(trim_display_path("/home/user/project", &trim_paths), "");
+        // Outside project → full absolute path
+        assert_eq!(trim_display_path("/other/project", &trim_paths), "/other/project");
+    }
+
+    #[test]
+    fn trim_display_path_no_trim_paths_shows_full_path() {
+        let trim_paths: Vec<PathBuf> = vec![];
+
+        // With no trim paths, the full absolute path is shown
+        assert_eq!(
+            trim_display_path("/home/user/project/.worktrees/feat", &trim_paths),
+            "/home/user/project/.worktrees/feat"
+        );
+    }
+
+    #[test]
+    fn trim_display_path_multiple_trim_paths() {
+        let trim_paths = vec![
+            PathBuf::from("/home/user/proj-a"),
+            PathBuf::from("/home/user/proj-b"),
+        ];
+
+        assert_eq!(
+            trim_display_path("/home/user/proj-a/.worktrees/feat1", &trim_paths),
+            ".worktrees/feat1"
+        );
+        assert_eq!(
+            trim_display_path("/home/user/proj-b/.worktrees/feat2", &trim_paths),
+            ".worktrees/feat2"
+        );
+        assert_eq!(
+            trim_display_path("/home/user/other-project", &trim_paths),
+            "/home/user/other-project"
+        );
+    }
+
+    #[test]
+    fn grouping_uses_worktree_abs_not_display_label() {
+        // Two agents in the same absolute worktree but with different
+        // display labels (e.g. one set before config change). They
+        // should still be grouped together because grouping uses
+        // worktree_abs as the key.
+        let mut agent_a = Agent::from_pane(
+            &pane_with("%1", "opencode", "opencode"),
+            AgentType::Opencode,
+        );
+        agent_a.worktree = Some(".worktrees/feat".to_string()); // display label
+        agent_a.worktree_abs = Some("/proj/.worktrees/feat".to_string()); // identity
+
+        let mut agent_b = Agent::from_pane(
+            &pane_with("%2", "opencode", "opencode"),
+            AgentType::Opencode,
+        );
+        agent_b.worktree = Some(".worktrees/feat".to_string()); // same display
+        agent_b.worktree_abs = Some("/proj/.worktrees/feat".to_string()); // same abs
+
+        let agents = vec![agent_a, agent_b];
+
+        // Grouping by worktree_abs: both should be in the same group
+        let mut groups: HashMap<Option<String>, Vec<&Agent>> = HashMap::new();
+        for agent in &agents {
+            groups
+                .entry(agent.worktree_abs.clone())
+                .or_default()
+                .push(agent);
+        }
+
+        assert_eq!(groups.len(), 1); // one group, not two
+        let group = groups.get(&Some("/proj/.worktrees/feat".to_string())).unwrap();
+        assert_eq!(group.len(), 2);
     }
 }
