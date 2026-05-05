@@ -219,10 +219,13 @@ impl SignalWatcher {
         self.signals.get(pane_id).and_then(|s| s.label.clone())
     }
 
+    /// Returns the saga list from the signal file.
+    /// Intentionally does NOT filter stale signals — sagas are display
+    /// context that persists across idle periods. Filtering stale causes
+    /// agents to lose their saga info when idle for >60s.
     pub fn get_sagas(&self, pane_id: &str) -> Vec<SagaInfo> {
         self.signals
             .get(pane_id)
-            .filter(|s| !s.is_stale())
             .and_then(|s| s.sagas.clone())
             .unwrap_or_default()
     }
