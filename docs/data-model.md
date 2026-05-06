@@ -99,6 +99,7 @@ pub struct SagaInfo {
     pub status: String,
     pub claimed_by: Option<String>,
     pub interaction: Option<String>,
+    pub interaction_at: Option<String>,
 }
 ```
 
@@ -109,6 +110,7 @@ pub struct SagaInfo {
 | `status` | String | Saga status (active, paused, done, wontdo) |
 | `claimed_by` | Option<String> | Agent that claimed the saga |
 | `interaction` | Option<String> | Last sg subcommand (context, claim, log, new, done, edit, relate, depend, unclaim, continue, reopen, wontdo) |
+| `interaction_at` | Option<String> | ISO 8601 timestamp of last interaction, used for recency sorting |
 
 ### DiffStats
 

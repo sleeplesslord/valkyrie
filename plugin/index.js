@@ -155,6 +155,7 @@ async function fetchSagaInfo(sagaIds, trackedSagas) {
           status: data.saga.status || "unknown",
           claimed_by: data.saga.claimed_by || null,
           interaction: existing?.interaction || null,
+          interaction_at: existing?.interaction_at || null,
         });
       }
     } catch (e) {
@@ -278,6 +279,7 @@ export default async function AgentSidebarPlugin(ctx) {
           status: existing?.status || "unknown",
           claimed_by: existing?.claimed_by || null,
           interaction: subcmd,
+          interaction_at: new Date().toISOString(),
         });
         found = true;
         debug("extractSagaIds:", subcmd, id);
@@ -309,6 +311,7 @@ export default async function AgentSidebarPlugin(ctx) {
             status: tex?.status || "unknown",
             claimed_by: tex?.claimed_by || null,
             interaction: subcmd, // same interaction for all IDs in multi-id command
+            interaction_at: new Date().toISOString(),
           });
           debug("extractSagaIds tail:", subcmd, tid);
         }
@@ -328,6 +331,7 @@ export default async function AgentSidebarPlugin(ctx) {
         status: existing?.status || "unknown",
         claimed_by: existing?.claimed_by || null,
         interaction: "new",
+        interaction_at: new Date().toISOString(),
       });
       debug("extractSagaIdFromOutput: new", m[1]);
       return true;
@@ -350,6 +354,7 @@ export default async function AgentSidebarPlugin(ctx) {
           status: data.saga.status || "unknown",
           claimed_by: data.saga.claimed_by || null,
           interaction: existing?.interaction || "context",
+          interaction_at: existing?.interaction_at || new Date().toISOString(),
         });
         debug("parseSagaFromToolOutput:", data.saga.id);
         found = true;

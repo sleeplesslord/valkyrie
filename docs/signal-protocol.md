@@ -36,8 +36,8 @@ Signal files provide a cooperative communication channel between agents and the 
   "last_update": "2026-04-15T18:30:00Z",
   "last_log": "Implemented JWT validation",
   "sagas": [
-    {"id": "abc123", "title": "Implement auth", "status": "active", "claimed_by": "agent-1", "interaction": "claim"},
-    {"id": "def456", "title": "Add OAuth", "status": "active", "claimed_by": null, "interaction": "context"}
+    {"id": "abc123", "title": "Implement auth", "status": "active", "claimed_by": "agent-1", "interaction": "claim", "interaction_at": "2026-04-15T18:29:55Z"},
+    {"id": "def456", "title": "Add OAuth", "status": "active", "claimed_by": null, "interaction": "context", "interaction_at": "2026-04-15T18:28:30Z"}
   ],
   "metadata": {
     "model": "claude-3-opus",
@@ -95,7 +95,8 @@ Each saga in the `sagas` array has:
   "title": "Implement auth",
   "status": "active",
   "claimed_by": "agent-1",
-  "interaction": "context"
+  "interaction": "context",
+  "interaction_at": "2026-04-15T18:30:00Z"
 }
 ```
 
@@ -106,6 +107,7 @@ Each saga in the `sagas` array has:
 | `status` | string | No | Saga status (active, paused, done, wontdo) |
 | `claimed_by` | string \| null | No | Agent that claimed the saga |
 | `interaction` | string \| null | No | Last sg subcommand used (see Interaction Values) |
+| `interaction_at` | string \| null | No | ISO 8601 timestamp of the last interaction. Used to sort sagas by recency in the sidebar |
 
 ### Interaction Values
 

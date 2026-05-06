@@ -1,4 +1,5 @@
 use crate::app::{App, Mode};
+use crate::signal::SagaInfo;
 use chrono::Utc;
 use ratatui::style::Stylize;
 use ratatui::{
@@ -249,7 +250,19 @@ fn render_agent_list(f: &mut Frame, app: &App, area: Rect) {
                 }
             }
 
-            for saga in agent.sagas.iter().take(5) {
+            // Sort sagas by most recent interaction first. Sagas without a
+            // timestamp sort to the end (older than anything with a timestamp).
+            let mut sorted_sagas: Vec<&SagaInfo> = agent.sagas.iter().collect();
+            sorted_sagas.sort_by(|a, b| {
+                match (&a.interaction_at, &b.interaction_at) {
+                    (Some(a_ts), Some(b_ts)) => b_ts.cmp(a_ts), // newest first
+                    (Some(_), None) => std::cmp::Ordering::Less,
+                    (None, Some(_)) => std::cmp::Ordering::Greater,
+                    (None, None) => std::cmp::Ordering::Equal,
+                }
+            });
+
+            for saga in sorted_sagas.iter().take(5) {
                 let saga_indent = if worktree.is_some() { "      " } else { "    " };
                 let (saga_status_str, saga_status_color) = match saga.status.as_str() {
                     "active" if saga.claimed_by.as_deref().map_or(false, |c| !c.is_empty()) => {

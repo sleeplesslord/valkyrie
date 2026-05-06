@@ -20,6 +20,9 @@ pub struct SagaInfo {
     pub claimed_by: Option<String>,
     /// Last sg subcommand used on this saga (context, claim, log, new, done, etc.)
     pub interaction: Option<String>,
+    /// ISO 8601 timestamp of the last interaction. Used to sort sagas by recency
+    /// so the most recently interacted-with saga appears first in the sidebar.
+    pub interaction_at: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
