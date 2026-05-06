@@ -221,7 +221,11 @@ impl App {
     fn update_git_diffs(&mut self) {
         for agent in &mut self.agents {
             if agent.status != AgentStatus::Offline {
-                agent.diff_stats = git::get_diff_stats(&agent.working_dir);
+                // Prefer worktree_abs over working_dir — working_dir can be
+                // the project root while worktree_abs is the specific worktree
+                // the agent is operating in, giving accurate per-worktree diffs.
+                let dir = agent.worktree_abs.as_deref().unwrap_or(&agent.working_dir);
+                agent.diff_stats = git::get_diff_stats(dir);
             }
         }
     }
@@ -533,7 +537,8 @@ impl App {
     pub fn start_diff_view(&mut self) {
         if let Some(agent) = self.selected_agent() {
             let agent_id = agent.pane_id.clone();
-            let diff = git::get_diff(&agent.working_dir)
+            let dir = agent.worktree_abs.as_deref().unwrap_or(&agent.working_dir);
+            let diff = git::get_diff(dir)
                 .unwrap_or_else(|| "Not a git repository".to_string());
             self.input_buffer = diff;
             self.diff_scroll = 0;
