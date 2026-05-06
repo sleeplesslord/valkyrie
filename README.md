@@ -1,12 +1,21 @@
 # valkyrie
 
-A tmux sidebar TUI for tracking coding agents in real-time.
+A tmux sidebar TUI for tracking AI coding agents in real-time via signal files.
+
+## How It Works
+
+Valkyrie discovers agents through **signal files** — small JSON files that agents write to `~/.valkyrie/agents/<pane-id>.json`. The sidebar watches this directory via inotify and updates instantly when signal files change. Any agent that can write a JSON file to the right path will appear in the sidebar — no plugin or special integration required beyond that.
+
+An opencode plugin is included that writes signal files automatically (status, tool activity, saga tracking, current file). Claude Code is also detected via pane command/title matching as a fallback. But the core protocol is agent-agnostic: if your agent can create a signal file, valkyrie can track it.
+
+See [docs/signal-protocol.md](docs/signal-protocol.md) for the full file format specification.
 
 ## Features
 
-- **Agent Detection**: Detects opencode (via signal files) and Claude Code (via pane command/title matching)
+- **Signal Protocol**: Real-time agent tracking via JSON signal files with inotify monitoring
+- **Agent-Agnostic**: Any agent that writes a signal file appears in the sidebar
 - **Status Tracking**: Shows running, idle, waiting for input, error, and offline states
-- **Signal Protocol**: Real-time updates via JSON signal files with inotify monitoring
+- **Activity Indicators**: Context-aware icons for coding, exploring, running, researching, thinking
 - **Saga Tracking**: Tracks agent saga interactions (claim, context, log, etc.) with status icons
 - **Worktree Grouping**: Groups agents by git worktree with configurable path trimming
 - **Git Diff Stats**: Shows +X/-Y diff statistics for each agent
