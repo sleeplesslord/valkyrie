@@ -2,13 +2,15 @@
 
 ## Overview
 
-Signal files provide a cooperative communication channel between agents and the sidebar. Agents that support this protocol write status updates to JSON files that the sidebar monitors in real-time.
+Signal files provide a cooperative communication channel between agents and the sidebar. Agents that support this protocol write status updates to JSON files that the sidebar monitors in real-time via inotify.
 
 ## Directory Structure
 
 ```
 ~/.valkyrie/
-├── state.json              # Sidebar state (user names, history)
+├── state.json              # Sidebar state (user names, config, trim paths)
+├── plugin.log               # Debug log from opencode plugin
+├── sidebar-pane             # Tracks sidebar pane ID for toggle script
 └── agents/
     ├── %0.json             # Status for pane %0
     ├── %1.json             # Status for pane %1
@@ -24,9 +26,15 @@ Signal files provide a cooperative communication channel between agents and the 
   "version": 1,
   "agent_type": "opencode",
   "status": "running",
+  "activity": "coding",
+  "tool_executing": "edit",
+  "label": "auth-service",
   "task": "Implementing authentication module",
   "working_dir": "/home/user/projects/auth-service",
+  "worktree": ".worktrees/feature-auth",
+  "current_file": "src/auth/mod.rs",
   "last_update": "2026-04-15T18:30:00Z",
+  "last_log": "Implemented JWT validation",
   "sagas": [
     {"id": "abc123", "title": "Implement auth", "status": "active", "claimed_by": "agent-1", "interaction": "claim"},
     {"id": "def456", "title": "Add OAuth", "status": "active", "claimed_by": null, "interaction": "context"}
@@ -53,13 +61,18 @@ Only required fields:
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `version` | int | No | Protocol version (currently 1) |
-| `agent_type` | string | No | Agent identifier (opencode, claude-code, etc.) |
+| `agent_type` | string | No | Agent identifier (`opencode`, `claude-code`) |
 | `status` | string | Yes | Current status (see Status Values) |
+| `activity` | string | No | Activity category (`coding`, `exploring`, `running`, `researching`, `thinking`) |
+| `tool_executing` | string | No | Name of tool currently executing |
+| `label` | string | No | Session display name (used as agent name in sidebar) |
 | `task` | string | No | Human-readable task description |
 | `working_dir` | string | No | Current working directory |
+| `worktree` | string | No | Worktree path (relative or absolute, used for grouping and display) |
+| `current_file` | string | No | File currently being edited |
 | `last_update` | string | Yes | ISO 8601 timestamp |
-| `sagas` | array | No | List of saga objects (see Saga Objects) |
 | `last_log` | string | No | Last `sg log` message from the agent |
+| `sagas` | array | No | List of saga objects (see Saga Objects) |
 | `metadata` | object | No | Agent-specific additional data |
 
 ### Status Values
@@ -117,80 +130,54 @@ The `interaction` field tracks what the agent last did with a saga, enabling the
 
 ### For opencode
 
-opencode should write signal updates when:
-1. Starting a task
-2. Completing a task
-3. Waiting for user input
-4. Encountering an error
-5. Entering idle state
+The opencode plugin (`plugin/index.js`) writes signal updates via event and tool hooks:
 
-Implementation approach:
-- Add hooks in opencode's event loop
-- Write to `~/.valkyrie/agents/<TMUX_PANE>.json`
-- Clean up file on exit
+**Event hooks** — `event({ event })` handles:
+1. `session.status` — busy/idle transitions, session ID and label capture
+2. `session.idle` / `session.error` — status changes
+3. `permission.asked` / `permission.updated` — waiting_input state
+4. `file.edited` — current file tracking
+5. `command.executed` — catches `sg` commands routed outside bash (slash commands, first-class tools)
 
-### Hook Implementation (Pseudocode)
+**Tool hooks**:
+- `tool.execute.before(input, output)` — captures bash commands, detects saga IDs via regex
+- `tool.execute.after(input, output)` — parses bash output for saga JSON, clears permission flags
 
-```python
-def update_signal(status, task=None):
-    pane_id = os.environ.get('TMUX_PANE', 'unknown')
-        signal_path = Path.home() / '.valkyrie' / 'agents' / f'{pane_id}.json'
-    
-    data = {
-        'status': status,
-        'last_update': datetime.utcnow().isoformat() + 'Z',
-    }
-    
-    if task:
-        data['task'] = task
-    
-    signal_path.parent.mkdir(parents=True, exist_ok=True)
-    signal_path.write_text(json.dumps(data))
-
-# Called at appropriate points in agent lifecycle
-update_signal('running', 'Refactoring auth module')
-# ... work ...
-update_signal('waiting_input', 'Need approval for file changes')
-# ... user input ...
-update_signal('completed', 'Refactoring complete')
-update_signal('idle')
-```
+**Signal file lifecycle**:
+1. Plugin captures `$TMUX_PANE` at startup as the signal filename
+2. Writes to `~/.valkyrie/agents/<TMUX_PANE>.json` on each status change
+3. Auto-detects pane ID desync via `syncPaneId()` (called every heartbeat)
+4. Deletes signal file on exit via `process.on("exit", ...)` using synchronous `unlinkSync()`
 
 ### Cleanup
 
-Agents should remove their signal file on clean exit:
+Agents should remove their signal file on clean exit. The opencode plugin does this via:
 
-```python
-def cleanup_signal():
-    pane_id = os.environ.get('TMUX_PANE')
-    if pane_id:
-    signal_path = Path.home() / '.valkyrie' / 'agents' / f'{pane_id}.json'
-        signal_path.unlink(missing_ok=True)
+```javascript
+process.on("exit", () => {
+  try { fs.unlinkSync(signalPath); } catch {}
+});
 ```
+
+Orphaned signal files (panes no longer in tmux) are also auto-cleaned by the TUI during pane discovery every 5 seconds.
 
 ## Sidebar Implementation
 
 ### File Watching
 
 Using `notify` crate:
-1. Watch `~/.valkyrie/agents/` directory
+1. Watch `~/.valkyrie/agents/` directory via inotify
 2. On `Create` or `Modify` events: parse JSON, update agent status
-3. On `Remove` event: mark agent as offline (or remove if configured)
-
-### Fallback Behavior
-
-When no signal file exists:
-1. Use `tmux capture-pane` to get pane content
-2. Parse content for status indicators
-3. Use process state as last resort
+3. On `Remove` event: mark agent as offline
+4. 2-second poll fallback in addition to inotify
 
 ### Staleness Detection
 
-Consider signal stale if:
-1. `last_update` is older than 60 seconds
-2. Pane no longer exists (via `tmux has-session`)
+A signal is considered stale if `last_update` is older than 60 seconds. The staleness filter is applied **selectively**:
 
-Stale signals trigger fallback status detection.
+**Volatile fields (filtered by stale)**: `status`, `activity`, `tool_executing`, `task`, `sagas`, `current_file`, `worktree` — these revert to defaults for stale agents.
+
+**Identity fields (NOT filtered by stale)**: `agent_type`, `label`, `last_update` — these persist even for stale agents. Filtering them would make opencode agents invisible or cause names to revert to "zsh" during idle periods.
 
 ## Backward Compatibility
 

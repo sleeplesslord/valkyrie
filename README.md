@@ -4,13 +4,16 @@ A tmux sidebar TUI for tracking coding agents in real-time.
 
 ## Features
 
-- **Agent Detection**: Automatically detects opencode, Claude Code, Aider, and generic agents
+- **Agent Detection**: Detects opencode (via signal files) and Claude Code (via pane command/title matching)
 - **Status Tracking**: Shows running, idle, waiting for input, error, and offline states
-- **Signal Protocol**: Real-time updates via signal files
-- **Worktree Grouping**: Groups agents by git worktree for better organization
+- **Signal Protocol**: Real-time updates via JSON signal files with inotify monitoring
+- **Saga Tracking**: Tracks agent saga interactions (claim, context, log, etc.) with status icons
+- **Worktree Grouping**: Groups agents by git worktree with configurable path trimming
 - **Git Diff Stats**: Shows +X/-Y diff statistics for each agent
 - **Jump to Pane**: Navigate directly to agent panes from sidebar
+- **Jump to Worktree**: Open a new pane in the agent's worktree directory
 - **Rename Agents**: Custom names persist across sessions
+- **Agent Cleanup**: Remove offline agents and their stale signal files
 - **tmux Integration**: Single-key sidebar state handling (hide/bring/spawn)
 
 ## Installation
@@ -48,8 +51,14 @@ After setup:
 # Run the sidebar (must be in tmux)
 valkyrie
 
-# Configure worktree root for grouping
-valkyrie config set-worktree-root /path/to/project
+# Configure path trimming for worktree display labels
+valkyrie config add-trim-path /path/to/project
+
+# Remove a trim path
+valkyrie config remove-trim-path /path/to/project
+
+# List configured trim paths
+valkyrie config list-trim-paths
 
 # Configure sidebar width (default: 50 columns)
 valkyrie config set-sidebar-width 65
@@ -67,8 +76,12 @@ valkyrie config show
 |-----|--------|
 | `j/k` | Navigate agents |
 | `Enter` | Jump to agent pane |
+| `w` | Open worktree in new pane |
 | `r` | Rename agent |
-| `d` | View git diff |
+| `d` | View git diff (inline) |
+| `D` | View git diff (new window) |
+| `x` | Cleanup selected offline agent |
+| `X` | Cleanup all offline agents |
 | `?` | Show help |
 | `q/Esc` | Quit |
 

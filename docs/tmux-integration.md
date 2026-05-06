@@ -40,36 +40,44 @@ main:@1:%1|valkyrie|valkyrie|/home/user/project|0
 ### Filter for Agent Panes
 
 Detect potential agent panes by:
-1. `pane_current_command` matching known agent processes
-2. `pane_title` containing agent identifiers
-3. `pane_current_path` matching project patterns
+1. Signal file presence in `~/.valkyrie/agents/` (primary — for opencode)
+2. `pane_current_command` matching known agent processes (for Claude Code via `ClaudeDetector`)
+3. Not matching the sidebar pane itself
 
 ## Navigation
 
 ### Jump to Agent Pane
 
+Pane IDs are globally unique and stable for the tmux server lifetime. Use them directly:
+
 ```bash
-tmux select-pane -t <session>:<window>.<pane>
+tmux select-pane -t %N
 ```
 
-Example:
+**Do not use cached `window_id` or `session_name` for navigation.** These become stale when panes move between windows (via `break-pane`, `join-pane`, `move-pane`). The two-step `select-window` → `select-pane` approach can jump to the wrong window.
+
 ```bash
-tmux select-pane -t main:@0.%0
+# WRONG — uses stale cached location
+tmux select-window -t main:@0
+tmux select-pane -t main:@0.%1
+
+# RIGHT — pane ID is ground truth, tmux auto-switches to its current window
+tmux select-pane -t %1
 ```
 
-### Return to Sidebar
+Cached `window_id`/`session_name` should only be used for display/organizational purposes (e.g., grouping agents by window in the sidebar), never for navigation commands.
 
-After jumping to agent, user can:
-1. Use tmux navigation (`prefix + arrow`)
-2. Press `Esc` or `q` in agent to return (requires agent support)
+## Sidebar States
+
+The `toggle-sidebar.sh` script provides three-state behavior on a single key (`prefix + s`):
+
+1. **Sidebar in current window** → hide it (move to a detached hidden session named `_valkyrie`)
+2. **Sidebar in different window or hidden** → bring it to the current window
+3. **No sidebar running** → spawn a new sidebar pane
+
+State is tracked in `~/.valkyrie/sidebar-pane`.
 
 ## Pane Renaming
-
-### Rename Window
-
-```bash
-tmux rename-window -t <window_id> "<new_name>"
-```
 
 ### Rename Pane Title
 
@@ -84,8 +92,8 @@ Note: User-renamed names stored in `~/.valkyrie/state.json` for persistence.
 ### On Exit
 
 When sidebar TUI exits:
-1. Kill the pane: `tmux kill-pane -t <sidebar_pane_id>`
-2. Or: Pane automatically closes when process ends
+1. Pane automatically closes when process ends
+2. State saved to `~/.valkyrie/state.json` before exit
 
 ### Graceful Shutdown
 
@@ -102,7 +110,6 @@ Useful for detecting sidebar context:
 |----------|-------------|
 | `TMUX` | Contains session ID, window, pane |
 | `TMUX_PANE` | Current pane ID |
-| `PANE` | (set by tmux) Current pane ID |
 
 ### Parse TMUX Variable
 
@@ -126,26 +133,16 @@ valkyrie config set-sidebar-width 65
 
 After updating width, run `valkyrie setup-tmux` again if your installed scripts are outdated.
 
-### Toggle Sidebar
-
-The `toggle-sidebar.sh` script provides toggle functionality:
-
-- If no sidebar exists: spawns new sidebar pane
-- If sidebar exists in current window: hides it (moves to a detached hidden session)
-- If sidebar exists in different window or hidden session: moves it to current window
-
-State is tracked in `~/.valkyrie/sidebar-pane`.
-
 ### Manual Config
 
 Users can add to `~/.tmux.conf`:
 
 ```bash
 # Toggle sidebar with prefix+s
-bind s run-shell "/path/to/toggle-sidebar.sh"
+bind s run-shell "~/.local/bin/toggle-sidebar.sh"
 
 # Close window when sidebar is the only pane left
-set-hook -g pane-exited 'run-shell "/path/to/check-sidebar-window-close.sh"'
+set-hook -g pane-exited 'run-shell "~/.local/bin/check-sidebar-window-close.sh"'
 ```
 
 ### Auto-start
@@ -162,22 +159,6 @@ set-hook -g session-created 'split-window -hb -l "$(valkyrie config get-sidebar-
 
 Note: Currently not recommended; manual launch preferred.
 
-## Pane Content Capture
-
-### Capture Current Content
-
-```bash
-tmux capture-pane -t <pane_id> -p -S -50
-```
-
-| Flag | Purpose |
-|------|---------|
-| `-p` | Print to stdout (don't copy to buffer) |
-| `-S -50` | Start 50 lines back from cursor |
-| `-E -` | End at cursor position |
-
-Used for fallback status detection when signal files unavailable.
-
 ## Terminal Handling
 
 ### Sidebar Terminal Setup
@@ -190,7 +171,7 @@ On startup:
 
 On exit:
 1. Restore terminal settings
-3. Exit alternate screen buffer
-4. Show cursor
+2. Exit alternate screen buffer
+3. Show cursor
 
 Handled automatically by ratatui/crossterm.
