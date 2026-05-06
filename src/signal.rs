@@ -187,7 +187,6 @@ impl SignalWatcher {
     pub fn get_worktree(&self, pane_id: &str) -> Option<String> {
         self.signals
             .get(pane_id)
-            .filter(|s| !s.is_stale())
             .and_then(|s| s.worktree.clone())
     }
 
@@ -195,7 +194,6 @@ impl SignalWatcher {
     pub fn get_working_dir(&self, pane_id: &str) -> Option<String> {
         self.signals
             .get(pane_id)
-            .filter(|s| !s.is_stale())
             .and_then(|s| s.working_dir.clone())
     }
 
