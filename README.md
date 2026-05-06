@@ -13,10 +13,10 @@ See [docs/signal-protocol.md](docs/signal-protocol.md) for the full file format 
 ## Features
 
 - **Signal Protocol**: Real-time agent tracking via JSON signal files with inotify monitoring
-- **Agent-Agnostic**: Any agent that writes a signal file appears in the sidebar
+- **Agent-Agnostic**: Any agent that writes a signal file appears in the sidebar ([signal-protocol.md](docs/signal-protocol.md))
 - **Status Tracking**: Shows running, idle, waiting for input, error, and offline states
 - **Activity Indicators**: Context-aware icons for coding, exploring, running, researching, thinking
-- **Saga Tracking**: Tracks agent saga interactions (claim, context, log, etc.) with status icons
+- **Saga Tracking**: Tracks agent interactions with [saga](https://github.com/sleeplesslord/saga) tasks (claim, context, log, etc.) with status icons
 - **Worktree Grouping**: Groups agents by git worktree with configurable path trimming
 - **Git Diff Stats**: Shows +X/-Y diff statistics for each agent
 - **Jump to Pane**: Navigate directly to agent panes from sidebar
