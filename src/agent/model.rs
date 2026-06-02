@@ -72,7 +72,7 @@ impl AgentStatus {
     }
 }
 
-fn truncate_tool(tool: &str) -> &str {
+pub fn truncate_tool(tool: &str) -> &str {
     match tool.len() {
         0..=6 => tool,
         _ => &tool[..6],

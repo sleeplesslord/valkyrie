@@ -30,12 +30,13 @@ pub struct SubagentInfo {
     #[allow(dead_code)]
     pub id: String,
     pub name: String,
+    #[serde(default)]
+    pub role: Option<String>,
     pub prompt: Option<String>,
     #[allow(dead_code)]
     pub description: Option<String>,
     pub status: String,
     pub activity: Option<String>,
-    #[allow(dead_code)]
     pub tool_executing: Option<String>,
     pub last_update: Option<String>,
 }

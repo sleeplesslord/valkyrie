@@ -1,3 +1,4 @@
+use crate::agent::truncate_tool;
 use crate::app::{App, Mode};
 use crate::signal::{SagaInfo, SubagentInfo};
 use chrono::Utc;
@@ -376,10 +377,15 @@ fn render_agent_list(f: &mut Frame, app: &App, area: Rect) {
                         _ => ("", Color::DarkGray),
                     };
 
+                    // Tool name (e.g. "edit", "bash") — shown after activity icon
+                    let tool_display = subagent.tool_executing.as_deref().map(truncate_tool);
+
                     // Truncate prompt to fit
                     let name_len = subagent.name.chars().count();
+                    let role_len = subagent.role.as_deref().map_or(0, |r| r.len() + 3); // " (role)"
                     let activity_len = if activity_str.is_empty() { 0 } else { activity_str.chars().count() + 1 };
-                    let used = sa_indent.len() + "⚡ ".len() + sa_status_str.len() + 1 + name_len + 1 + activity_len;
+                    let tool_len = tool_display.map_or(0, |t| t.len() + 1); // +1 for space
+                    let used = sa_indent.len() + "⚡ ".len() + sa_status_str.len() + 1 + name_len + role_len + 1 + activity_len + tool_len;
                     let prompt_max = width.saturating_sub(used);
                     let prompt_text = subagent.prompt.as_deref().unwrap_or("");
                     let prompt_display = truncate_str(prompt_text, prompt_max);
@@ -392,6 +398,10 @@ fn render_agent_list(f: &mut Frame, app: &App, area: Rect) {
                         Span::styled(subagent.name.clone(), sa_style(Color::Cyan)),
                     ];
 
+                    if let Some(role) = &subagent.role {
+                        spans.push(Span::styled(format!(" ({})", role), sa_style(Color::DarkGray)));
+                    }
+
                     if !prompt_display.is_empty() {
                         spans.push(Span::styled(" ".to_string(), sa_style(Color::DarkGray)));
                         spans.push(Span::styled(prompt_display, sa_style(Color::Gray)));
@@ -400,6 +410,11 @@ fn render_agent_list(f: &mut Frame, app: &App, area: Rect) {
                     if !activity_str.is_empty() {
                         spans.push(Span::styled(" ".to_string(), sa_style(Color::DarkGray)));
                         spans.push(Span::styled(activity_str.to_string(), sa_style(activity_color)));
+                    }
+
+                    if let Some(tool) = tool_display {
+                        spans.push(Span::styled(" ".to_string(), sa_style(Color::DarkGray)));
+                        spans.push(Span::styled(tool.to_string(), sa_style(Color::Gray)));
                     }
 
                     items.push(ListItem::new(Line::from(spans)));

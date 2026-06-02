@@ -443,18 +443,22 @@ export default async function AgentSidebarPlugin(ctx) {
   return {
     async event({ event }) {
       switch (event.type) {
-        case "session.status":
-          if (event.properties?.sessionID && event.properties.sessionID !== currentSessionId) {
-            currentSessionId = event.properties.sessionID;
+        case "session.status": {
+          const statusSessionId = event.properties?.sessionID;
+          const isSubagentStatus = trackedSubagents.has(statusSessionId);
+
+          // Don't let subagent status events override parent's currentSessionId
+          if (statusSessionId && statusSessionId !== currentSessionId && !isSubagentStatus) {
+            currentSessionId = statusSessionId;
             currentLabel = null;
           }
-          if (event.properties?.sessionID && !currentLabel) {
-            await refreshSessionLabelById(event.properties.sessionID);
+          if (statusSessionId && !currentLabel && !isSubagentStatus) {
+            await refreshSessionLabelById(statusSessionId);
           }
+
           // Update subagent status
-          const saStatusId = event.properties?.sessionID;
-          if (trackedSubagents.has(saStatusId)) {
-            const sa = trackedSubagents.get(saStatusId);
+          if (isSubagentStatus) {
+            const sa = trackedSubagents.get(statusSessionId);
             if (event.properties.status.type === "busy") {
               sa.status = "running";
               sa.activity = sa.activity || "thinking";
@@ -464,15 +468,19 @@ export default async function AgentSidebarPlugin(ctx) {
               sa.tool_executing = null;
             }
             sa.last_update = new Date().toISOString();
-          }
-          if (event.properties.status.type === "busy") {
-            currentActivity = currentActivity || "thinking";
-            await writeSignal("running");
+            await writeSignal();
           } else {
-            currentActivity = null;
-            await writeSignal("idle");
+            // Parent session status
+            if (event.properties.status.type === "busy") {
+              currentActivity = currentActivity || "thinking";
+              await writeSignal("running");
+            } else {
+              currentActivity = null;
+              await writeSignal("idle");
+            }
           }
           break;
+        }
           
         case "session.created":
         case "session.updated": {
@@ -482,9 +490,11 @@ export default async function AgentSidebarPlugin(ctx) {
           }
           // Track subagent sessions spawned by our current session
           if (session?.parentID && session.parentID === currentSessionId && session.id) {
+            debug("subagent session fields:", JSON.stringify(session).slice(0, 300));
             trackedSubagents.set(session.id, {
               id: session.id,
               name: session.agent || "subagent",
+              role: session.role || session.type || null,
               prompt: null,
               description: null,
               status: "running",
@@ -492,7 +502,7 @@ export default async function AgentSidebarPlugin(ctx) {
               tool_executing: null,
               last_update: new Date().toISOString(),
             });
-            debug("subagent created:", session.id, "agent:", session.agent);
+            debug("subagent created:", session.id, "agent:", session.agent, "role:", session.role || session.type || "n/a");
             await writeSignal();
           }
           break;
@@ -500,44 +510,54 @@ export default async function AgentSidebarPlugin(ctx) {
 
         case "session.idle": {
           const sessionId = extractSessionId(event);
-          if (sessionId && sessionId !== currentSessionId) {
+          const isSubagentIdle = trackedSubagents.has(sessionId);
+
+          // Don't let subagent idle events change parent's currentSessionId
+          if (sessionId && sessionId !== currentSessionId && !isSubagentIdle) {
             currentSessionId = sessionId;
             currentLabel = null;
           }
-          if (sessionId && !currentLabel) {
+          if (sessionId && !currentLabel && !isSubagentIdle) {
             await refreshSessionLabelById(sessionId);
           }
-          // Subagent went idle
-          if (trackedSubagents.has(sessionId)) {
+
+          if (isSubagentIdle) {
             const sa = trackedSubagents.get(sessionId);
             sa.status = "idle";
             sa.activity = null;
             sa.tool_executing = null;
             sa.last_update = new Date().toISOString();
+            await writeSignal();
+          } else {
+            currentActivity = null;
+            currentTool = null;
+            await writeSignal("idle");
           }
-          currentActivity = null;
-          currentTool = null;
-          await writeSignal("idle");
           break;
         }
 
         case "session.error": {
           const sessionId = extractSessionId(event);
-          if (sessionId && sessionId !== currentSessionId) {
+          const isSubagentError = trackedSubagents.has(sessionId);
+
+          // Don't let subagent error events change parent's currentSessionId
+          if (sessionId && sessionId !== currentSessionId && !isSubagentError) {
             currentSessionId = sessionId;
             currentLabel = null;
           }
-          // Subagent errored
-          if (trackedSubagents.has(sessionId)) {
+
+          if (isSubagentError) {
             const sa = trackedSubagents.get(sessionId);
             sa.status = "error";
             sa.activity = null;
             sa.tool_executing = null;
             sa.last_update = new Date().toISOString();
+            await writeSignal();
+          } else {
+            currentActivity = null;
+            currentTool = null;
+            await writeSignal("error");
           }
-          currentActivity = null;
-          currentTool = null;
-          await writeSignal("error");
           break;
         }
 
@@ -599,16 +619,40 @@ export default async function AgentSidebarPlugin(ctx) {
         case "message.part.updated": {
           const part = event.properties?.part;
           if (part?.type === "subtask") {
+            debug("subtask part fields:", JSON.stringify(part).slice(0, 300));
+            const partSessionId = part.sessionID || part.sessionId || event.properties?.sessionID || null;
             const agentName = part.agent || null;
             const prompt = part.prompt || part.description || null;
-            // Match by agent name to the most recent subagent without a prompt
-            for (const [id, sa] of trackedSubagents) {
-              if (!sa.prompt && (!agentName || sa.name === agentName)) {
+
+            // Try to match by sessionID first (exact), then fall back to name heuristic
+            let matched = false;
+            if (partSessionId && trackedSubagents.has(partSessionId)) {
+              const sa = trackedSubagents.get(partSessionId);
+              if (!sa.prompt) {
                 sa.prompt = prompt;
                 sa.description = part.description || null;
+                // Also update name if subtask part provides a better one
+                if (agentName && agentName !== sa.name && sa.name === "subagent") {
+                  sa.name = agentName;
+                }
                 sa.last_update = new Date().toISOString();
-                debug("subtask part matched:", id, "prompt:", prompt?.slice(0, 60));
-                break; // only fill the first unmatched subagent
+                debug("subtask matched by sessionID:", partSessionId, "prompt:", prompt?.slice(0, 60));
+                matched = true;
+              }
+            }
+            if (!matched) {
+              // Fall back: match by agent name to the most recent subagent without a prompt
+              for (const [id, sa] of trackedSubagents) {
+                if (!sa.prompt && (!agentName || sa.name === agentName)) {
+                  sa.prompt = prompt;
+                  sa.description = part.description || null;
+                  if (agentName && sa.name === "subagent") {
+                    sa.name = agentName;
+                  }
+                  sa.last_update = new Date().toISOString();
+                  debug("subtask matched by name:", id, "prompt:", prompt?.slice(0, 60));
+                  break;
+                }
               }
             }
             await writeSignal();
@@ -641,15 +685,18 @@ export default async function AgentSidebarPlugin(ctx) {
     },
 
     "tool.execute.before": async (input, output) => {
-      currentTool = input.tool;
-      currentActivity = TOOL_ACTIVITY[input.tool] || "thinking";
+      const isSubagentTool = input.sessionID && trackedSubagents.has(input.sessionID);
 
-      // Update subagent tool state if this tool belongs to a tracked subagent session
-      if (input.sessionID && trackedSubagents.has(input.sessionID)) {
+      if (isSubagentTool) {
+        // Subagent's tool — update subagent only, skip parent's currentTool/currentActivity
         const sa = trackedSubagents.get(input.sessionID);
         sa.tool_executing = input.tool;
         sa.activity = TOOL_ACTIVITY[input.tool] || "thinking";
         sa.last_update = new Date().toISOString();
+      } else {
+        // Parent agent's tool
+        currentTool = input.tool;
+        currentActivity = TOOL_ACTIVITY[input.tool] || "thinking";
       }
 
       if (input.tool === "bash") {
@@ -680,8 +727,10 @@ export default async function AgentSidebarPlugin(ctx) {
       // input is {tool, sessionID, callID} — no args in after hook.
       // Use the command saved from the before hook.
 
-      // Clear subagent tool state if this was a subagent's tool
-      if (input.sessionID && trackedSubagents.has(input.sessionID)) {
+      const isSubagentTool = input.sessionID && trackedSubagents.has(input.sessionID);
+
+      if (isSubagentTool) {
+        // Subagent's tool finished — clear subagent tool state only
         const sa = trackedSubagents.get(input.sessionID);
         sa.tool_executing = null;
         sa.activity = "thinking";
@@ -711,14 +760,17 @@ export default async function AgentSidebarPlugin(ctx) {
         if (parsed) sagaRefreshNeeded = true;
       }
 
-      if (currentTool === input.tool) {
-        currentTool = null;
+      // Only clear parent's tool state if this wasn't a subagent's tool
+      if (!isSubagentTool) {
+        if (currentTool === input.tool) {
+          currentTool = null;
+        }
+        // Tool finished — permission is no longer pending (was auto-approved
+        // or just completed). Clear the flag and ensure we're not stuck
+        // in waiting_input.
+        permissionPending = false;
+        currentActivity = currentTool ? (TOOL_ACTIVITY[currentTool] || "thinking") : "thinking";
       }
-      // Tool finished — permission is no longer pending (was auto-approved
-      // or just completed). Clear the flag and ensure we're not stuck
-      // in waiting_input.
-      permissionPending = false;
-      currentActivity = currentTool ? (TOOL_ACTIVITY[currentTool] || "thinking") : "thinking";
       await writeSignal("running");
     },
   };
