@@ -422,8 +422,21 @@ export default async function AgentSidebarPlugin(ctx) {
   debug("plugin initialized, pane:", paneId);
 
   const HEARTBEAT_INTERVAL = 15000;
+  const SUBAGENT_IDLE_EVICT_MS = 60000; // evict subagents idle > 60s
   setInterval(async () => {
     await syncPaneId();
+    // Evict subagents that have been idle for over 60s — they've likely
+    // completed and OpenCode won't fire session.deleted for child sessions.
+    const now = Date.now();
+    for (const [id, sa] of trackedSubagents) {
+      if (sa.status === "idle" && sa.last_update) {
+        const idleMs = now - new Date(sa.last_update).getTime();
+        if (idleMs > SUBAGENT_IDLE_EVICT_MS) {
+          trackedSubagents.delete(id);
+          debug("subagent evicted (idle 60s+):", id, sa.name);
+        }
+      }
+    }
     await writeSignal();
   }, HEARTBEAT_INTERVAL);
 
