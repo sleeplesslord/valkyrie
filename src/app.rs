@@ -617,13 +617,32 @@ impl App {
         Ok(count + subagent_count)
     }
 
-    /// Remove all idle subagents from every agent.
-    /// Returns the total number of subagents removed.
+    /// Remove idle and stale subagents from every agent.
+    /// Evicts subagents that are "idle" OR haven't been updated in >60s
+    /// (stale), since OpenCode may not always fire session.idle/deleted
+    /// for child sessions. Returns the total number of subagents removed.
     pub fn clear_idle_subagents(&mut self) -> usize {
         let mut total = 0;
         for agent in &mut self.agents {
             let before = agent.subagents.len();
-            agent.subagents.retain(|sa| sa.status != "idle");
+            agent.subagents.retain(|sa| {
+                if sa.status == "idle" {
+                    return false;
+                }
+                // Also evict stale subagents (no update in >60s) regardless
+                // of status — a truly active subagent gets continuous
+                // tool/status events that keep last_update fresh.
+                if let Some(last_update) = &sa.last_update {
+                    if let Ok(ts) = chrono::DateTime::parse_from_rfc3339(last_update) {
+                        let age = chrono::Utc::now()
+                            .signed_duration_since(ts.with_timezone(&chrono::Utc));
+                        if age.num_seconds() > 60 {
+                            return false;
+                        }
+                    }
+                }
+                true
+            });
             total += before - agent.subagents.len();
         }
         total

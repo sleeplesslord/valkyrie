@@ -425,15 +425,18 @@ export default async function AgentSidebarPlugin(ctx) {
   const SUBAGENT_IDLE_EVICT_MS = 60000; // evict subagents idle > 60s
   setInterval(async () => {
     await syncPaneId();
-    // Evict subagents that have been idle for over 60s — they've likely
-    // completed and OpenCode won't fire session.deleted for child sessions.
+    // Evict subagents with no updates for > 60s — they've likely completed.
+    // OpenCode may not always fire session.idle/session.deleted for children,
+    // so we evict based on staleness of last_update regardless of status.
+    // A truly active subagent gets continuous tool/status events that keep
+    // last_update fresh.
     const now = Date.now();
     for (const [id, sa] of trackedSubagents) {
-      if (sa.status === "idle" && sa.last_update) {
-        const idleMs = now - new Date(sa.last_update).getTime();
-        if (idleMs > SUBAGENT_IDLE_EVICT_MS) {
+      if (sa.last_update) {
+        const staleMs = now - new Date(sa.last_update).getTime();
+        if (staleMs > SUBAGENT_IDLE_EVICT_MS) {
           trackedSubagents.delete(id);
-          debug("subagent evicted (idle 60s+):", id, sa.name);
+          debug("subagent evicted (stale " + Math.round(staleMs/1000) + "s):", id, sa.name, "status:", sa.status);
         }
       }
     }
