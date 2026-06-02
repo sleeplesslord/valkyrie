@@ -446,6 +446,7 @@ export default async function AgentSidebarPlugin(ctx) {
         case "session.status": {
           const statusSessionId = event.properties?.sessionID;
           const isSubagentStatus = trackedSubagents.has(statusSessionId);
+          debug("session.status:", statusSessionId, "isSub:", isSubagentStatus, "status:", event.properties?.status?.type, "currentSession:", currentSessionId);
 
           // Don't let subagent status events override parent's currentSessionId
           if (statusSessionId && statusSessionId !== currentSessionId && !isSubagentStatus) {
@@ -493,16 +494,16 @@ export default async function AgentSidebarPlugin(ctx) {
             debug("subagent session fields:", JSON.stringify(session).slice(0, 300));
             trackedSubagents.set(session.id, {
               id: session.id,
-              name: session.agent || "subagent",
+              name: session.agent || session.slug || "subagent",
               role: session.role || session.type || null,
-              prompt: null,
+              prompt: session.title || null,
               description: null,
               status: "running",
               activity: "thinking",
               tool_executing: null,
               last_update: new Date().toISOString(),
             });
-            debug("subagent created:", session.id, "agent:", session.agent, "role:", session.role || session.type || "n/a");
+            debug("subagent created:", session.id, "name:", session.agent || session.slug, "title:", session.title?.slice(0, 60), "role:", session.role || session.type || "n/a");
             await writeSignal();
           }
           break;
@@ -686,6 +687,7 @@ export default async function AgentSidebarPlugin(ctx) {
 
     "tool.execute.before": async (input, output) => {
       const isSubagentTool = input.sessionID && trackedSubagents.has(input.sessionID);
+      debug("tool before:", input.tool, "sessionID:", input.sessionID, "isSub:", isSubagentTool, "knownSubs:", [...trackedSubagents.keys()].join(","));
 
       if (isSubagentTool) {
         // Subagent's tool — update subagent only, skip parent's currentTool/currentActivity
@@ -728,6 +730,7 @@ export default async function AgentSidebarPlugin(ctx) {
       // Use the command saved from the before hook.
 
       const isSubagentTool = input.sessionID && trackedSubagents.has(input.sessionID);
+      debug("tool after:", input.tool, "sessionID:", input.sessionID, "isSub:", isSubagentTool);
 
       if (isSubagentTool) {
         // Subagent's tool finished — clear subagent tool state only
