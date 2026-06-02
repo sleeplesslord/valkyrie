@@ -249,14 +249,18 @@ impl SignalWatcher {
             .unwrap_or_default()
     }
 
-    /// Returns the subagent list from the signal file.
-    /// Intentionally does NOT filter stale signals — subagent info is
-    /// display context that persists across idle periods.
+    /// Returns the subagent list from the signal file, filtering out
+    /// idle subagents. Idle subagents are completed/finished and provide
+    /// no useful display info — they just clutter the sidebar. Unlike
+    /// agent_type/label (identity data), subagents are transient.
     pub fn get_subagents(&self, pane_id: &str) -> Vec<SubagentInfo> {
         self.signals
             .get(pane_id)
             .and_then(|s| s.subagents.clone())
             .unwrap_or_default()
+            .into_iter()
+            .filter(|sa| sa.status != "idle")
+            .collect()
     }
 
     pub fn get_current_file(&self, pane_id: &str) -> Option<String> {
