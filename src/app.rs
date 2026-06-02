@@ -586,8 +586,8 @@ impl App {
         Ok(())
     }
 
-    /// Clean up all offline agents at once.
-    /// Returns the number of agents cleaned up.
+    /// Clean up all offline agents and idle subagents at once.
+    /// Returns the number of agents cleaned up plus subagents removed.
     pub fn cleanup_all_offline(&mut self) -> Result<usize> {
         let offline_ids: Vec<String> = self
             .agents
@@ -611,7 +611,22 @@ impl App {
             self.clamp_selection();
         }
 
-        Ok(count)
+        // Also remove idle subagents from all agents
+        let subagent_count = self.clear_idle_subagents();
+
+        Ok(count + subagent_count)
+    }
+
+    /// Remove all idle subagents from every agent.
+    /// Returns the total number of subagents removed.
+    pub fn clear_idle_subagents(&mut self) -> usize {
+        let mut total = 0;
+        for agent in &mut self.agents {
+            let before = agent.subagents.len();
+            agent.subagents.retain(|sa| sa.status != "idle");
+            total += before - agent.subagents.len();
+        }
+        total
     }
 }
 
