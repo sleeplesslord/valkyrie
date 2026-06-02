@@ -492,18 +492,23 @@ export default async function AgentSidebarPlugin(ctx) {
           // Track subagent sessions spawned by our current session
           if (session?.parentID && session.parentID === currentSessionId && session.id) {
             debug("subagent session fields:", JSON.stringify(session).slice(0, 300));
+            // Parse agent type from title e.g. "Do stuff (@general subagent)" → "general"
+            const typeMatch = session.title?.match(/@(\w+)\s+subagent/i);
+            const agentType = typeMatch ? typeMatch[1] : null;
+            // Strip the type tag from prompt for cleaner display
+            const cleanTitle = session.title?.replace(/\s*\(@?\w+\s+subagent\)\s*/i, "").trim() || null;
             trackedSubagents.set(session.id, {
               id: session.id,
-              name: session.agent || session.slug || "subagent",
+              name: agentType || session.agent || session.slug || "subagent",
               role: session.role || session.type || null,
-              prompt: session.title || null,
+              prompt: cleanTitle || session.title || null,
               description: null,
               status: "running",
               activity: "thinking",
               tool_executing: null,
               last_update: new Date().toISOString(),
             });
-            debug("subagent created:", session.id, "name:", session.agent || session.slug, "title:", session.title?.slice(0, 60), "role:", session.role || session.type || "n/a");
+            debug("subagent created:", session.id, "name:", agentType || session.agent || session.slug, "title:", cleanTitle?.slice(0, 60), "role:", session.role || session.type || "n/a");
             await writeSignal();
           }
           break;
