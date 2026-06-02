@@ -1,5 +1,5 @@
 use crate::app::{App, Mode};
-use crate::signal::SagaInfo;
+use crate::signal::{SagaInfo, SubagentInfo};
 use chrono::Utc;
 use ratatui::style::Stylize;
 use ratatui::{
@@ -250,77 +250,160 @@ fn render_agent_list(f: &mut Frame, app: &App, area: Rect) {
                 }
             }
 
-            // Sort sagas by most recent interaction first. Sagas without a
-            // timestamp sort to the end (older than anything with a timestamp).
-            let mut sorted_sagas: Vec<&SagaInfo> = agent.sagas.iter().collect();
-            sorted_sagas.sort_by(|a, b| {
-                match (&a.interaction_at, &b.interaction_at) {
-                    (Some(a_ts), Some(b_ts)) => b_ts.cmp(a_ts), // newest first
-                    (Some(_), None) => std::cmp::Ordering::Less,
-                    (None, Some(_)) => std::cmp::Ordering::Greater,
-                    (None, None) => std::cmp::Ordering::Equal,
-                }
-            });
+            // --- Sectioned display: TASKS (sagas) and AGENTS (subagents) ---
+            let has_sagas = !agent.sagas.is_empty();
+            let has_subagents = !agent.subagents.is_empty();
 
-            for saga in sorted_sagas.iter().take(5) {
-                let saga_indent = if worktree.is_some() { "      " } else { "    " };
-                let (saga_status_str, saga_status_color) = match saga.status.as_str() {
-                    "active" if saga.claimed_by.as_deref().map_or(false, |c| !c.is_empty()) => {
-                        ("◐", Color::Yellow)
+            if has_sagas || has_subagents {
+                let section_indent = if worktree.is_some() { "    " } else { "  " };
+                let sub_style = |fg: Color| Style::default().fg(fg);
+
+                // TASKS separator (only if sagas exist)
+                if has_sagas {
+                    let sep = format_section_separator(section_indent, "TASKS", width);
+                    items.push(ListItem::new(Line::styled(sep, sub_style(Color::DarkGray))));
+                }
+
+                // Sort sagas by most recent interaction first. Sagas without a
+                // timestamp sort to the end (older than anything with a timestamp).
+                let mut sorted_sagas: Vec<&SagaInfo> = agent.sagas.iter().collect();
+                sorted_sagas.sort_by(|a, b| {
+                    match (&a.interaction_at, &b.interaction_at) {
+                        (Some(a_ts), Some(b_ts)) => b_ts.cmp(a_ts), // newest first
+                        (Some(_), None) => std::cmp::Ordering::Less,
+                        (None, Some(_)) => std::cmp::Ordering::Greater,
+                        (None, None) => std::cmp::Ordering::Equal,
                     }
-                    "active" => ("●", Color::Green),
-                    "paused" => ("◷", Color::Yellow),
-                    "done" => ("✓", Color::DarkGray),
-                    "wontdo" => ("⊘", Color::DarkGray),
-                    _ => ("?", Color::DarkGray),
-                };
+                });
 
-                // Interaction icon: shows what sg command was last used on this saga
-                let (interaction_str, interaction_color) = match saga.interaction.as_deref() {
-                    Some("context") => ("◫", Color::Cyan),  // read/referenced
-                    Some("claim") => ("◐", Color::Yellow),  // claimed
-                    Some("log") => ("✎", Color::Gray),      // logged work
-                    Some("new") => ("✦", Color::Green),     // created
-                    Some("done") => ("✓", Color::DarkGray), // completed
-                    Some("edit") => ("✎", Color::Magenta),  // edited
-                    Some("relate") | Some("depend") => ("◈", Color::Cyan), // linked
-                    Some("unclaim") => ("○", Color::Yellow), // released
-                    Some("continue") => ("▶", Color::Green), // resumed
-                    Some("reopen") => ("↻", Color::Yellow), // reopened
-                    Some("wontdo") => ("⊘", Color::DarkGray), // won't-do
-                    Some(_) => ("○", Color::DarkGray),      // other
-                    None => ("", Color::DarkGray),          // no interaction recorded
-                };
-
-                let saga_title_color =
-                    if saga.status.as_str() == "done" || saga.status.as_str() == "wontdo" {
-                        Color::DarkGray
-                    } else {
-                        Color::Gray
+                for saga in sorted_sagas.iter().take(5) {
+                    let saga_indent = if worktree.is_some() { "      " } else { "    " };
+                    let (saga_status_str, saga_status_color) = match saga.status.as_str() {
+                        "active" if saga.claimed_by.as_deref().map_or(false, |c| !c.is_empty()) => {
+                            ("◐", Color::Yellow)
+                        }
+                        "active" => ("●", Color::Green),
+                        "paused" => ("◷", Color::Yellow),
+                        "done" => ("✓", Color::DarkGray),
+                        "wontdo" => ("⊘", Color::DarkGray),
+                        _ => ("?", Color::DarkGray),
                     };
-                let interaction_width = if interaction_str.is_empty() {
-                    0
-                } else {
-                    interaction_str.chars().count() + 1
-                };
-                let used = saga_indent.len() + saga_status_str.len() + 1 + interaction_width;
-                let saga_title_max = width.saturating_sub(used);
-                let saga_title = truncate_str(&saga.title, saga_title_max);
-                let saga_style = |fg: Color| Style::default().fg(fg);
-                let mut spans = vec![
-                    Span::styled(saga_indent.to_string(), saga_style(Color::DarkGray)),
-                    Span::styled(saga_status_str.to_string(), saga_style(saga_status_color)),
-                ];
-                if !interaction_str.is_empty() {
-                    spans.push(Span::styled(
-                        format!(" {}", interaction_str),
-                        saga_style(interaction_color),
-                    ));
+
+                    // Interaction icon: shows what sg command was last used on this saga
+                    let (interaction_str, interaction_color) = match saga.interaction.as_deref() {
+                        Some("context") => ("◫", Color::Cyan),  // read/referenced
+                        Some("claim") => ("◐", Color::Yellow),  // claimed
+                        Some("log") => ("✎", Color::Gray),      // logged work
+                        Some("new") => ("✦", Color::Green),     // created
+                        Some("done") => ("✓", Color::DarkGray), // completed
+                        Some("edit") => ("✎", Color::Magenta),  // edited
+                        Some("relate") | Some("depend") => ("◈", Color::Cyan), // linked
+                        Some("unclaim") => ("○", Color::Yellow), // released
+                        Some("continue") => ("▶", Color::Green), // resumed
+                        Some("reopen") => ("↻", Color::Yellow), // reopened
+                        Some("wontdo") => ("⊘", Color::DarkGray), // won't-do
+                        Some(_) => ("○", Color::DarkGray),      // other
+                        None => ("", Color::DarkGray),          // no interaction recorded
+                    };
+
+                    let saga_title_color =
+                        if saga.status.as_str() == "done" || saga.status.as_str() == "wontdo" {
+                            Color::DarkGray
+                        } else {
+                            Color::Gray
+                        };
+                    let interaction_width = if interaction_str.is_empty() {
+                        0
+                    } else {
+                        interaction_str.chars().count() + 1
+                    };
+                    let used = saga_indent.len() + saga_status_str.len() + 1 + interaction_width;
+                    let saga_title_max = width.saturating_sub(used);
+                    let saga_title = truncate_str(&saga.title, saga_title_max);
+                    let saga_style = |fg: Color| Style::default().fg(fg);
+                    let mut spans = vec![
+                        Span::styled(saga_indent.to_string(), saga_style(Color::DarkGray)),
+                        Span::styled(saga_status_str.to_string(), saga_style(saga_status_color)),
+                    ];
+                    if !interaction_str.is_empty() {
+                        spans.push(Span::styled(
+                            format!(" {}", interaction_str),
+                            saga_style(interaction_color),
+                        ));
+                    }
+                    spans.push(Span::styled(" ".to_string(), saga_style(Color::DarkGray)));
+                    spans.push(Span::styled(saga_title, saga_style(saga_title_color)));
+                    let saga_line = Line::from(spans);
+                    items.push(ListItem::new(saga_line));
                 }
-                spans.push(Span::styled(" ".to_string(), saga_style(Color::DarkGray)));
-                spans.push(Span::styled(saga_title, saga_style(saga_title_color)));
-                let saga_line = Line::from(spans);
-                items.push(ListItem::new(saga_line));
+
+                // AGENTS separator (only if subagents exist)
+                if has_subagents {
+                    let sep = format_section_separator(section_indent, "AGENTS", width);
+                    items.push(ListItem::new(Line::styled(sep, sub_style(Color::DarkGray))));
+                }
+
+                // Sort subagents by most recent last_update first
+                let mut sorted_subagents: Vec<&SubagentInfo> = agent.subagents.iter().collect();
+                sorted_subagents.sort_by(|a, b| {
+                    match (&a.last_update, &b.last_update) {
+                        (Some(a_ts), Some(b_ts)) => b_ts.cmp(a_ts), // newest first
+                        (Some(_), None) => std::cmp::Ordering::Less,
+                        (None, Some(_)) => std::cmp::Ordering::Greater,
+                        (None, None) => std::cmp::Ordering::Equal,
+                    }
+                });
+
+                for subagent in sorted_subagents {
+                    let sa_indent = if worktree.is_some() { "      " } else { "    " };
+                    let sa_style = |fg: Color| Style::default().fg(fg);
+
+                    // Status dot
+                    let (sa_status_str, sa_status_color) = match subagent.status.as_str() {
+                        "running" => ("◉", Color::Rgb(80, 250, 123)),
+                        "idle" => ("○", Color::Rgb(150, 150, 150)),
+                        "error" => ("◈", Color::Rgb(255, 85, 85)),
+                        _ => ("?", Color::DarkGray),
+                    };
+
+                    // Activity icon (right-aligned, like parent agent)
+                    let (activity_str, activity_color) = match subagent.activity.as_deref() {
+                        Some("coding") => ("✎", Color::Rgb(80, 250, 123)),
+                        Some("exploring") => ("◉", Color::Rgb(0, 245, 255)),
+                        Some("running") => ("⟳", Color::Rgb(241, 250, 140)),
+                        Some("researching") => ("◈", Color::Rgb(255, 121, 198)),
+                        Some("thinking") => ("◎", Color::White),
+                        _ => ("", Color::DarkGray),
+                    };
+
+                    // Truncate prompt to fit
+                    let name_len = subagent.name.chars().count();
+                    let activity_len = if activity_str.is_empty() { 0 } else { activity_str.chars().count() + 1 };
+                    let used = sa_indent.len() + "⚡ ".len() + sa_status_str.len() + 1 + name_len + 1 + activity_len;
+                    let prompt_max = width.saturating_sub(used);
+                    let prompt_text = subagent.prompt.as_deref().unwrap_or("");
+                    let prompt_display = truncate_str(prompt_text, prompt_max);
+
+                    let mut spans = vec![
+                        Span::styled(sa_indent.to_string(), sa_style(Color::DarkGray)),
+                        Span::styled("⚡ ".to_string(), sa_style(Color::Yellow)),
+                        Span::styled(sa_status_str.to_string(), sa_style(sa_status_color)),
+                        Span::styled(" ".to_string(), sa_style(Color::DarkGray)),
+                        Span::styled(subagent.name.clone(), sa_style(Color::Cyan)),
+                    ];
+
+                    if !prompt_display.is_empty() {
+                        spans.push(Span::styled(" ".to_string(), sa_style(Color::DarkGray)));
+                        spans.push(Span::styled(prompt_display, sa_style(Color::Gray)));
+                    }
+
+                    if !activity_str.is_empty() {
+                        spans.push(Span::styled(" ".to_string(), sa_style(Color::DarkGray)));
+                        spans.push(Span::styled(activity_str.to_string(), sa_style(activity_color)));
+                    }
+
+                    items.push(ListItem::new(Line::from(spans)));
+                }
             }
         }
 
@@ -355,6 +438,14 @@ fn truncate_str(s: &str, max_len: usize) -> String {
     } else {
         s.to_string()
     }
+}
+
+/// Format a section separator line: `indent ┈┈ LABEL ┈┈┈┈┈` padded to width.
+/// Uses U+2508 (light quadruple dash horizontal) for a subtle stipple.
+fn format_section_separator(indent: &str, label: &str, width: usize) -> String {
+    let prefix = format!("{} ┈┈ {} ", indent, label);
+    let remaining = width.saturating_sub(prefix.chars().count());
+    format!("{}{}", prefix, "┈".repeat(remaining))
 }
 
 fn format_relative_time(dt: &chrono::DateTime<chrono::Utc>) -> String {

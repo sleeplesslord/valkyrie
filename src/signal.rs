@@ -26,6 +26,21 @@ pub struct SagaInfo {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+pub struct SubagentInfo {
+    #[allow(dead_code)]
+    pub id: String,
+    pub name: String,
+    pub prompt: Option<String>,
+    #[allow(dead_code)]
+    pub description: Option<String>,
+    pub status: String,
+    pub activity: Option<String>,
+    #[allow(dead_code)]
+    pub tool_executing: Option<String>,
+    pub last_update: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
 #[allow(dead_code)]
 pub struct SignalFile {
     pub version: Option<i32>,
@@ -42,6 +57,8 @@ pub struct SignalFile {
     pub sagas: Option<Vec<SagaInfo>>,
     pub last_log: Option<String>,
     pub metadata: Option<serde_json::Value>,
+    #[serde(default)]
+    pub subagents: Option<Vec<SubagentInfo>>,
 }
 
 impl SignalFile {
@@ -228,6 +245,16 @@ impl SignalWatcher {
         self.signals
             .get(pane_id)
             .and_then(|s| s.sagas.clone())
+            .unwrap_or_default()
+    }
+
+    /// Returns the subagent list from the signal file.
+    /// Intentionally does NOT filter stale signals — subagent info is
+    /// display context that persists across idle periods.
+    pub fn get_subagents(&self, pane_id: &str) -> Vec<SubagentInfo> {
+        self.signals
+            .get(pane_id)
+            .and_then(|s| s.subagents.clone())
             .unwrap_or_default()
     }
 

@@ -188,6 +188,7 @@ export default async function AgentSidebarPlugin(ctx) {
   let lastSagaRefresh = 0;
   let lastLogMessage = null;
   const SAGA_REFRESH_INTERVAL = 10000;
+  const trackedSubagents = new Map(); // sessionID → SubagentInfo
 
   function extractSession(event) {
     const properties = event?.properties;
@@ -386,6 +387,7 @@ export default async function AgentSidebarPlugin(ctx) {
       await mkdir(SIGNAL_DIR, { recursive: true });
       await refreshSagas();
       const sagas = [...trackedSagas.values()].reverse().slice(0, 10);
+      const subagents = [...trackedSubagents.values()];
       await writeFile(signalPath, JSON.stringify({
         version: 1,
         agent_type: "opencode",
@@ -400,6 +402,7 @@ export default async function AgentSidebarPlugin(ctx) {
         last_update: new Date().toISOString(),
         sagas: sagas.length > 0 ? sagas : undefined,
         last_log: lastLogMessage || undefined,
+        subagents: subagents.length > 0 ? subagents : undefined,
       }, null, 2));
     } catch (err) {
       console.error("[valkyrie plugin] Failed to write signal:", err.message);
@@ -435,6 +438,20 @@ export default async function AgentSidebarPlugin(ctx) {
           if (event.properties?.sessionID && !currentLabel) {
             await refreshSessionLabelById(event.properties.sessionID);
           }
+          // Update subagent status
+          const saStatusId = event.properties?.sessionID;
+          if (trackedSubagents.has(saStatusId)) {
+            const sa = trackedSubagents.get(saStatusId);
+            if (event.properties.status.type === "busy") {
+              sa.status = "running";
+              sa.activity = sa.activity || "thinking";
+            } else {
+              sa.status = "idle";
+              sa.activity = null;
+              sa.tool_executing = null;
+            }
+            sa.last_update = new Date().toISOString();
+          }
           if (event.properties.status.type === "busy") {
             currentActivity = currentActivity || "thinking";
             await writeSignal("running");
@@ -450,6 +467,21 @@ export default async function AgentSidebarPlugin(ctx) {
           if (setLabelFromSession(session)) {
             await writeSignal();
           }
+          // Track subagent sessions spawned by our current session
+          if (session?.parentID && session.parentID === currentSessionId && session.id) {
+            trackedSubagents.set(session.id, {
+              id: session.id,
+              name: session.agent || "subagent",
+              prompt: null,
+              description: null,
+              status: "running",
+              activity: "thinking",
+              tool_executing: null,
+              last_update: new Date().toISOString(),
+            });
+            debug("subagent created:", session.id, "agent:", session.agent);
+            await writeSignal();
+          }
           break;
         }
 
@@ -461,6 +493,14 @@ export default async function AgentSidebarPlugin(ctx) {
           }
           if (sessionId && !currentLabel) {
             await refreshSessionLabelById(sessionId);
+          }
+          // Subagent went idle
+          if (trackedSubagents.has(sessionId)) {
+            const sa = trackedSubagents.get(sessionId);
+            sa.status = "idle";
+            sa.activity = null;
+            sa.tool_executing = null;
+            sa.last_update = new Date().toISOString();
           }
           currentActivity = null;
           currentTool = null;
@@ -474,6 +514,14 @@ export default async function AgentSidebarPlugin(ctx) {
             currentSessionId = sessionId;
             currentLabel = null;
           }
+          // Subagent errored
+          if (trackedSubagents.has(sessionId)) {
+            const sa = trackedSubagents.get(sessionId);
+            sa.status = "error";
+            sa.activity = null;
+            sa.tool_executing = null;
+            sa.last_update = new Date().toISOString();
+          }
           currentActivity = null;
           currentTool = null;
           await writeSignal("error");
@@ -485,6 +533,12 @@ export default async function AgentSidebarPlugin(ctx) {
           if (sessionId && sessionId === currentSessionId) {
             currentSessionId = null;
             currentLabel = null;
+            await writeSignal();
+          }
+          // Subagent session ended — remove from tracking
+          if (trackedSubagents.has(sessionId)) {
+            trackedSubagents.delete(sessionId);
+            debug("subagent deleted:", sessionId);
             await writeSignal();
           }
           break;
@@ -526,6 +580,29 @@ export default async function AgentSidebarPlugin(ctx) {
           break;
         }
 
+        // SubtaskPart: when the parent agent delegates a subtask, this
+        // event carries the prompt/description/agent info. Correlate with
+        // tracked subagents to fill in their display details.
+        case "message.part.updated": {
+          const part = event.properties?.part;
+          if (part?.type === "subtask") {
+            const agentName = part.agent || null;
+            const prompt = part.prompt || part.description || null;
+            // Match by agent name to the most recent subagent without a prompt
+            for (const [id, sa] of trackedSubagents) {
+              if (!sa.prompt && (!agentName || sa.name === agentName)) {
+                sa.prompt = prompt;
+                sa.description = part.description || null;
+                sa.last_update = new Date().toISOString();
+                debug("subtask part matched:", id, "prompt:", prompt?.slice(0, 60));
+                break; // only fill the first unmatched subagent
+              }
+            }
+            await writeSignal();
+          }
+          break;
+        }
+
         // command.executed fires when opencode's internal command system
         // runs a slash command or tool. This catches sg commands that might
         // not go through the bash tool (e.g., when opencode routes sg as
@@ -554,6 +631,14 @@ export default async function AgentSidebarPlugin(ctx) {
       currentTool = input.tool;
       currentActivity = TOOL_ACTIVITY[input.tool] || "thinking";
 
+      // Update subagent tool state if this tool belongs to a tracked subagent session
+      if (input.sessionID && trackedSubagents.has(input.sessionID)) {
+        const sa = trackedSubagents.get(input.sessionID);
+        sa.tool_executing = input.tool;
+        sa.activity = TOOL_ACTIVITY[input.tool] || "thinking";
+        sa.last_update = new Date().toISOString();
+      }
+
       if (input.tool === "bash") {
         const cmd = extractBashCommand(output.args);
         if (cmd) {
@@ -581,6 +666,15 @@ export default async function AgentSidebarPlugin(ctx) {
     "tool.execute.after": async (input, output) => {
       // input is {tool, sessionID, callID} — no args in after hook.
       // Use the command saved from the before hook.
+
+      // Clear subagent tool state if this was a subagent's tool
+      if (input.sessionID && trackedSubagents.has(input.sessionID)) {
+        const sa = trackedSubagents.get(input.sessionID);
+        sa.tool_executing = null;
+        sa.activity = "thinking";
+        sa.last_update = new Date().toISOString();
+      }
+
       const cmd = input.tool === "bash" ? lastBashCommand : null;
       lastBashCommand = null;
 

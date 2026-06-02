@@ -1,5 +1,5 @@
 use crate::git::DiffStats;
-use crate::signal::SagaInfo;
+use crate::signal::{SagaInfo, SubagentInfo};
 use crate::tmux::PaneInfo;
 use chrono::{DateTime, Utc};
 
@@ -115,6 +115,7 @@ pub struct Agent {
     pub current_file: Option<String>,
     pub last_log: Option<String>,
     pub sagas: Vec<SagaInfo>,
+    pub subagents: Vec<SubagentInfo>,
 }
 
 impl Agent {
@@ -144,6 +145,7 @@ impl Agent {
             current_file: None,
             last_log: None,
             sagas: Vec::new(),
+            subagents: Vec::new(),
         }
     }
 }
