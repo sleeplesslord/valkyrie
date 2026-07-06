@@ -54,6 +54,7 @@ fn parse_signal_agent_type(agent_type: &str) -> Option<AgentType> {
     match agent_type.to_ascii_lowercase().as_str() {
         "opencode" => Some(AgentType::Opencode),
         "claude-code" => Some(AgentType::ClaudeCode),
+        "codex" => Some(AgentType::Codex),
         _ => None,
     }
 }
@@ -705,6 +706,8 @@ mod tests {
             parse_signal_agent_type("claude-code"),
             Some(AgentType::ClaudeCode)
         );
+        assert_eq!(parse_signal_agent_type("codex"), Some(AgentType::Codex));
+        assert_eq!(parse_signal_agent_type("CODEX"), Some(AgentType::Codex));
         assert_eq!(parse_signal_agent_type("unknown"), None);
     }
 

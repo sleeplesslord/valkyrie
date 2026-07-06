@@ -45,15 +45,23 @@ struct Args {
 
 #[derive(Subcommand, Debug)]
 enum Commands {
-    #[command(about = "Install opencode plugin")]
+    #[command(about = "Install plugin (opencode by default, use --codex for Codex hooks)")]
     Install {
         #[arg(long, help = "Force reinstall if already installed")]
         force: bool,
+        #[arg(long, help = "Install Codex hooks instead of opencode plugin")]
+        codex: bool,
     },
-    #[command(about = "Uninstall opencode plugin")]
-    Uninstall,
-    #[command(about = "Check plugin installation status")]
-    Status,
+    #[command(about = "Uninstall plugin (opencode by default, use --codex for Codex hooks)")]
+    Uninstall {
+        #[arg(long, help = "Uninstall Codex hooks instead of opencode plugin")]
+        codex: bool,
+    },
+    #[command(about = "Check plugin installation status (use --codex for Codex hooks)")]
+    Status {
+        #[arg(long, help = "Check Codex hook status instead of opencode plugin")]
+        codex: bool,
+    },
     #[command(about = "Configure valkyrie")]
     Config {
         #[command(subcommand)]
@@ -107,17 +115,29 @@ async fn main() -> Result<()> {
     let args = Args::parse();
 
     match args.command {
-        Some(Commands::Install { force }) => {
-            plugin::install(force)?;
-            println!("Plugin installed successfully!");
-            println!("Restart opencode for changes to take effect.");
+        Some(Commands::Install { force, codex }) => {
+            if codex {
+                plugin::install_codex(force)?;
+            } else {
+                plugin::install(force)?;
+                println!("Plugin installed successfully!");
+                println!("Restart opencode for changes to take effect.");
+            }
         }
-        Some(Commands::Uninstall) => {
-            plugin::uninstall()?;
-            println!("Plugin uninstalled successfully!");
+        Some(Commands::Uninstall { codex }) => {
+            if codex {
+                plugin::uninstall_codex()?;
+            } else {
+                plugin::uninstall()?;
+                println!("Plugin uninstalled successfully!");
+            }
         }
-        Some(Commands::Status) => {
-            plugin::status()?;
+        Some(Commands::Status { codex }) => {
+            if codex {
+                plugin::status_codex()?;
+            } else {
+                plugin::status()?;
+            }
         }
         Some(Commands::Config { command }) => {
             handle_config_command(command)?;

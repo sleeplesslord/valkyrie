@@ -98,6 +98,7 @@ fn render_agent_list(f: &mut Frame, app: &App, area: Rect) {
             let name_color = match agent.agent_type {
                 crate::agent::AgentType::Opencode => Color::Cyan,
                 crate::agent::AgentType::ClaudeCode => Color::Magenta,
+                crate::agent::AgentType::Codex => Color::Green,
             };
 
             let status_indicator = agent.status.indicator(
